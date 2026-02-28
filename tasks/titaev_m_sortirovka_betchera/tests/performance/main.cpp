@@ -1,15 +1,15 @@
 #include <gtest/gtest.h>
 
-#include <random>
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
 #include "titaev_m_sortirovka_betchera/seq/include/ops_seq.hpp"
 #include "util/include/perf_test_util.hpp"
+#include <random>
 
 namespace titaev_m_sortirovka_betchera {
 
 class TitaevBatcherRadixPerfTests
     : public ppc::util::BaseRunPerfTests<InType, OutType> {
- protected:
+protected:
   static constexpr size_t kSize = 200000;
   InType input_;
 
@@ -23,7 +23,7 @@ class TitaevBatcherRadixPerfTests
     }
   }
 
-  bool CheckTestOutputData(OutType& output) final {
+  bool CheckTestOutputData(OutType &output) final {
     for (size_t i = 1; i < output.size(); i++) {
       if (output[i] < output[i - 1])
         return false;
@@ -31,9 +31,7 @@ class TitaevBatcherRadixPerfTests
     return true;
   }
 
-  InType GetTestInputData() final {
-    return input_;
-  }
+  InType GetTestInputData() final { return input_; }
 };
 
 TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceModes) {
@@ -43,22 +41,15 @@ TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceModes) {
 namespace {
 
 const auto kPerfTasks =
-    ppc::util::MakeAllPerfTasks<
-        InType,
-        TitaevSortirovkaBetcheraSEQ>(
-            PPC_SETTINGS_titaev_m_sortirovka_betchera);
+    ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ>(
+        PPC_SETTINGS_titaev_m_sortirovka_betchera);
 
-const auto kValues =
-    ppc::util::TupleToGTestValues(kPerfTasks);
+const auto kValues = ppc::util::TupleToGTestValues(kPerfTasks);
 
-const auto kNameGen =
-    TitaevBatcherRadixPerfTests::CustomPerfTestName;
+const auto kNameGen = TitaevBatcherRadixPerfTests::CustomPerfTestName;
 
-INSTANTIATE_TEST_SUITE_P(
-    PerformanceSortingTests,
-    TitaevBatcherRadixPerfTests,
-    kValues,
-    kNameGen);
+INSTANTIATE_TEST_SUITE_P(PerformanceSortingTests, TitaevBatcherRadixPerfTests,
+                         kValues, kNameGen);
 
-}  // namespace
-}  // namespace titaev_m_sortirovka_betchera
+} // namespace
+} // namespace titaev_m_sortirovka_betchera

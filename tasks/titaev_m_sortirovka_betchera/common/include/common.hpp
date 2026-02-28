@@ -12,4 +12,4 @@ using OutType = std::vector<double>;
 using TestType = std::tuple<int, std::string>;
 using BaseTask = ppc::task::Task<InType, OutType>;
 
-}  // namespace titaev_m_sortirovka_betchera
+} // namespace titaev_m_sortirovka_betchera
