@@ -6,17 +6,17 @@
 namespace nesterov_a_test_task_processes {
 
 class NesterovATestTaskMPI : public BaseTask {
- public:
+public:
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kMPI;
   }
   explicit NesterovATestTaskMPI(const InType &in);
 
- private:
+private:
   bool ValidationImpl() override;
   bool PreProcessingImpl() override;
   bool RunImpl() override;
   bool PostProcessingImpl() override;
 };
 
-}  // namespace nesterov_a_test_task_processes
+} // namespace nesterov_a_test_task_processes

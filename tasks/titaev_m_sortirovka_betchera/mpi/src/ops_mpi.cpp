@@ -69,4 +69,4 @@ bool NesterovATestTaskMPI::PostProcessingImpl() {
   return GetOutput() > 0;
 }
 
-}  // namespace nesterov_a_test_task_processes
+} // namespace nesterov_a_test_task_processes
