@@ -1,9 +1,10 @@
 #include "titaev_m_sortirovka_betchera/seq/include/ops_seq.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <vector>
-#include <cstdint>
+
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
 namespace titaev_m_sortirovka_betchera {
 
