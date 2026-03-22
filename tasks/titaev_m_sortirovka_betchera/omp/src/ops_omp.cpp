@@ -159,3 +159,4 @@ bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
 }
 
 }  // namespace titaev_m_sortirovka_betchera
+// Titaev VerF
