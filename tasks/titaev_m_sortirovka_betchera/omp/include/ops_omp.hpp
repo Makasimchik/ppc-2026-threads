@@ -12,7 +12,6 @@ namespace titaev_m_sortirovka_betchera {
 
 class TitaevSortirovkaBetcheraOMP : public BaseTask {
  public:
-  // Конструктор теперь принимает TaskData
   explicit TitaevSortirovkaBetcheraOMP(std::shared_ptr<ppc::core::TaskData> taskData) : BaseTask(std::move(taskData)) {}
 
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {

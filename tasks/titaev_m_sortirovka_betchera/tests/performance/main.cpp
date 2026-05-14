@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <memory>
+#include <chrono>
 #include <random>
 #include <vector>
 
@@ -20,6 +20,7 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
   void SetUp() override {
     std::mt19937 gen(42);
     std::uniform_real_distribution<double> dist(-10000.0, 10000.0);
+
     input.resize(kSize);
     for (size_t i = 0; i < kSize; i++) {
       input[i] = dist(gen);
@@ -40,6 +41,8 @@ TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceModes) {
 }
 
 namespace {
+
+// Утилита MakeAllPerfTasks автоматически создаст TaskData и передаст его в конструкторы
 const auto kPerfTasks = ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ, TitaevSortirovkaBetcheraOMP>(
     PPC_SETTINGS_titaev_m_sortirovka_betchera);
 
@@ -47,5 +50,6 @@ const auto kValues = ppc::util::TupleToGTestValues(kPerfTasks);
 const auto kNameGen = TitaevBatcherRadixPerfTests::CustomPerfTestName;
 
 INSTANTIATE_TEST_SUITE_P(PerformanceSortingTests, TitaevBatcherRadixPerfTests, kValues, kNameGen);
+
 }  // namespace
 }  // namespace titaev_m_sortirovka_betchera
