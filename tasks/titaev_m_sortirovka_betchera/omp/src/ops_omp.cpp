@@ -25,13 +25,12 @@ double OrderedUintToDouble(uint64_t x) {
 }  // namespace
 
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
-  return !task_data->inputs.empty() && !task_data->outputs.empty() &&
-         task_data->inputs_count[0] == task_data->outputs_count[0];
+  return task_data && task_data->inputs_count[0] > 0 && task_data->outputs_count[0] == task_data->inputs_count[0];
 }
 
 bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
-  auto *ptr = reinterpret_cast<double *>(task_data->inputs[0]);
   size_t n = task_data->inputs_count[0];
+  auto *ptr = reinterpret_cast<double *>(task_data->inputs[0]);
   GetInput().assign(ptr, ptr + n);
   GetOutput().resize(n);
   return true;
@@ -95,9 +94,6 @@ void TitaevSortirovkaBetcheraOMP::BatcherSort() {
 
 bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   size_t n = GetInput().size();
-  if (n == 0) {
-    return true;
-  }
   std::vector<uint64_t> keys(n);
   ConvertToKeys(GetInput(), keys);
   RadixSort(keys);
