@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <chrono>
+#include <cstddef>
 #include <random>
 #include <vector>
 
@@ -14,42 +14,48 @@ namespace titaev_m_sortirovka_betchera {
 
 class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
-  static constexpr size_t kSize = 200000;
-  InType input;
+  const int kCount_ = 1000000;
+  InType input_data_;
 
   void SetUp() override {
-    std::mt19937 gen(42);
-    std::uniform_real_distribution<double> dist(-10000.0, 10000.0);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dist(-1e6, 1e6);
 
-    input.resize(kSize);
-    for (size_t i = 0; i < kSize; i++) {
-      input[i] = dist(gen);
+    input_data_.resize(kCount_);
+    for (int i = 0; i < kCount_; ++i) {
+      input_data_[i] = dist(gen);
     }
   }
 
-  bool CheckTestOutputData(OutType &output) final {
-    return std::is_sorted(output.begin(), output.end());
+  bool CheckTestOutputData(OutType &output_data) final {
+    if (output_data.size() != static_cast<std::size_t>(kCount_)) {
+      return false;
+    }
+    return std::is_sorted(output_data.begin(), output_data.end());
   }
 
   InType GetTestInputData() final {
-    return input;
+    return input_data_;
   }
 };
 
-TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceModes) {
+TEST_P(TitaevBatcherRadixPerfTests, RunPerfModes) {
   ExecuteTest(GetParam());
 }
 
 namespace {
 
-// Утилита MakeAllPerfTasks автоматически создаст TaskData и передаст его в конструкторы
-const auto kPerfTasks = ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ, TitaevSortirovkaBetcheraOMP>(
-    PPC_SETTINGS_titaev_m_sortirovka_betchera);
+const auto kAllPerfTasks =
+    ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ, TitaevSortirovkaBetcheraOMP>(
+        PPC_SETTINGS_titaev_m_sortirovka_betchera);
 
-const auto kValues = ppc::util::TupleToGTestValues(kPerfTasks);
-const auto kNameGen = TitaevBatcherRadixPerfTests::CustomPerfTestName;
+const auto kGtestValues = ppc::util::TupleToGTestValues(kAllPerfTasks);
 
-INSTANTIATE_TEST_SUITE_P(PerformanceSortingTests, TitaevBatcherRadixPerfTests, kValues, kNameGen);
+const auto kPerfTestName = TitaevBatcherRadixPerfTests::CustomPerfTestName;
+
+INSTANTIATE_TEST_SUITE_P(PerformanceTests, TitaevBatcherRadixPerfTests, kGtestValues, kPerfTestName);
 
 }  // namespace
+
 }  // namespace titaev_m_sortirovka_betchera
