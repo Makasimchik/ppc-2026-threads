@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TITAEV_M_SOR_BETCHER_OMP_HPP
+#define TITAEV_M_SOR_BETCHER_OMP_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -28,7 +29,6 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
 
   static void LSDRadixSort(std::vector<double> &arr);
   static void BatcherOddEvenMerge(std::vector<double> &arr, size_t n);
-
   static inline void CompareSwap(std::vector<double> &arr, size_t i, size_t j) {
     if (arr[i] > arr[j]) {
       std::swap(arr[i], arr[j]);
@@ -37,3 +37,7 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
 };
 
 }  // namespace titaev_m_sortirovka_betchera
+
+#include "../src/ops_omp.cpp"
+
+#endif  // TITAEV_M_SOR_BETCHER_OMP_HPP

@@ -1,11 +1,12 @@
-#include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
+#ifndef TITAEV_M_SOR_BETCHER_OMP_CPP
+#define TITAEV_M_SOR_BETCHER_OMP_CPP
 
 #include <omp.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 namespace titaev_m_sortirovka_betchera {
 
@@ -18,11 +19,9 @@ TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
   return true;
 }
-
 bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
   return true;
 }
-
 bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
   return true;
 }
@@ -54,14 +53,13 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   if (n <= 1) {
     return;
   }
-
   constexpr int kBits = 8;
   constexpr int kBuckets = 1 << kBits;
-  constexpr int kPasses = static_cast<int>((sizeof(uint64_t) * 8) / kBits);
+  constexpr int kPasses = 8;
 
   std::vector<uint64_t> keys(n);
   for (size_t i = 0; i < n; ++i) {
-    keys[i] = TitaevSortirovkaBetcheraOMP::PackDouble(array[i]);
+    keys[i] = PackDouble(array[i]);
   }
 
   std::vector<uint64_t> tmp_keys(n);
@@ -70,42 +68,38 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   for (int pass = 0; pass < kPasses; ++pass) {
     const int shift = pass * kBits;
     size_t cnt[kBuckets + 1] = {0};
-
     for (size_t i = 0; i < n; ++i) {
-      size_t d = (keys[i] >> shift) & (kBuckets - 1);
-      ++cnt[d + 1];
+      ++cnt[((keys[i] >> shift) & (kBuckets - 1)) + 1];
     }
     for (int i = 0; i < kBuckets; ++i) {
       cnt[i + 1] += cnt[i];
     }
-
     for (size_t i = 0; i < n; ++i) {
-      size_t d = (keys[i] >> shift) & (kBuckets - 1);
-      size_t pos = cnt[d]++;
+      size_t pos = cnt[(keys[i] >> shift) & (kBuckets - 1)]++;
       tmp_keys[pos] = keys[i];
       tmp_vals[pos] = array[i];
     }
     keys.swap(tmp_keys);
     array.swap(tmp_vals);
   }
-
   for (size_t i = 0; i < n; ++i) {
-    array[i] = TitaevSortirovkaBetcheraOMP::UnpackDouble(keys[i]);
+    array[i] = UnpackDouble(keys[i]);
   }
 }
 
 void TitaevSortirovkaBetcheraOMP::BatcherOddEvenMerge(std::vector<double> &arr, size_t n) {
   for (size_t po = n / 2; po > 0; po >>= 1) {
-    if (po == n / 2) {
-#pragma omp parallel for default(none) shared(arr, po)
-      for (ptrdiff_t i = 0; i < (ptrdiff_t)po; ++i) {
-        CompareSwap(arr, (size_t)i, (size_t)i + po);
-      }
-    } else {
-#pragma omp parallel for default(none) shared(arr, n, po)
-      for (ptrdiff_t i = (ptrdiff_t)po; i < (ptrdiff_t)(n - po); i += (ptrdiff_t)(2 * po)) {
-        for (size_t j = 0; j < po; ++j) {
-          CompareSwap(arr, (size_t)i + j, (size_t)i + j + po);
+#pragma omp parallel for default(none) shared(arr, po, n)
+    for (long long i = 0; i < (long long)n; i++) {
+      // Упрощенная логика Батчера для стабильности параллелизма
+      size_t idx = (size_t)i;
+      if (po == n / 2) {
+        if (idx < po) {
+          CompareSwap(arr, idx, idx + po);
+        }
+      } else {
+        if ((idx / po) % 2 == 1 && idx + po < n) {
+          CompareSwap(arr, idx, idx + po);
         }
       }
     }
@@ -115,12 +109,10 @@ void TitaevSortirovkaBetcheraOMP::BatcherOddEvenMerge(std::vector<double> &arr, 
 bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   auto data = GetInput();
   const size_t original_size = data.size();
-
   if (original_size <= 1) {
     GetOutput() = data;
     return true;
   }
-
   size_t pow2 = 1;
   while (pow2 < original_size) {
     pow2 <<= 1;
@@ -145,10 +137,11 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   }
 
   BatcherOddEvenMerge(data, pow2);
-
   data.resize(original_size);
   GetOutput() = data;
   return true;
 }
 
 }  // namespace titaev_m_sortirovka_betchera
+
+#endif  // TITAEV_M_SOR_BETCHER_OMP_CPP
