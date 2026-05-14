@@ -40,8 +40,10 @@ bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
 
 bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
   size_t n = task_data->inputs_count[0];
-  auto *in_ptr = reinterpret_cast<double *>(task_data->inputs[0]);
-  GetInput().assign(in_ptr, in_ptr + n);
+  if (n > 0) {
+    auto *in_ptr = reinterpret_cast<double *>(task_data->inputs[0]);
+    GetInput().assign(in_ptr, in_ptr + n);
+  }
   GetOutput().resize(n);
   return true;
 }
@@ -61,7 +63,7 @@ void TitaevSortirovkaBetcheraOMP::RadixSort(std::vector<uint64_t> &keys) {
   }
   std::vector<uint64_t> tmp(n);
   for (int pass = 0; pass < 8; pass++) {
-    std::vector<size_t> count(256, 0);
+    size_t count[256] = {0};
     int shift = pass * 8;
     for (size_t i = 0; i < n; i++) {
       count[(keys[i] >> shift) & 0xFF]++;
@@ -77,8 +79,9 @@ void TitaevSortirovkaBetcheraOMP::RadixSort(std::vector<uint64_t> &keys) {
 }
 
 void TitaevSortirovkaBetcheraOMP::ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output) {
+  const size_t n = keys.size();
 #pragma omp parallel for
-  for (int i = 0; i < (int)keys.size(); i++) {
+  for (int i = 0; i < (int)n; i++) {
     output[i] = OrderedUintToDouble(keys[i]);
   }
 }
