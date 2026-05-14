@@ -15,7 +15,7 @@ TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
 }
 
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
-  return !GetInput().empty();
+  return true;
 }
 
 bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
@@ -23,8 +23,8 @@ bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
   return true;
 }
 
-uint64_t TitaevSortirovkaBetcheraOMP::PackDouble(double v) {
-  uint64_t bits;
+uint64_t TitaevSortirovkaBetcheraOMP::PackDouble(double v) noexcept {
+  uint64_t bits = 0ULL;
   std::memcpy(&bits, &v, sizeof(bits));
   if ((bits & (1ULL << 63)) != 0ULL) {
     bits = ~bits;
@@ -34,13 +34,13 @@ uint64_t TitaevSortirovkaBetcheraOMP::PackDouble(double v) {
   return bits;
 }
 
-double TitaevSortirovkaBetcheraOMP::UnpackDouble(uint64_t k) {
+double TitaevSortirovkaBetcheraOMP::UnpackDouble(uint64_t k) noexcept {
   if ((k & (1ULL << 63)) != 0ULL) {
     k ^= (1ULL << 63);
   } else {
     k = ~k;
   }
-  double v;
+  double v = 0.0;
   std::memcpy(&v, &k, sizeof(v));
   return v;
 }
@@ -50,15 +50,12 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   if (n <= 1) {
     return;
   }
-
   std::vector<uint64_t> keys(n);
   for (size_t i = 0; i < n; ++i) {
     keys[i] = PackDouble(array[i]);
   }
-
   std::vector<uint64_t> tmp_keys(n);
   std::vector<double> tmp_vals(n);
-
   for (int pass = 0; pass < 8; ++pass) {
     size_t cnt[256] = {0};
     int shift = pass * 8;
@@ -83,11 +80,20 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
 
 void TitaevSortirovkaBetcheraOMP::BatcherMerge(std::vector<double> &arr, size_t n) {
   for (size_t po = n / 2; po > 0; po >>= 1) {
+    if (po == n / 2) {
+#pragma omp parallel for shared(arr, po) default(none)
+      for (int i = 0; i < (int)po; ++i) {
+        if (arr[i] > arr[i + po]) {
+          std::swap(arr[i], arr[i + po]);
+        }
+      }
+    } else {
 #pragma omp parallel for shared(arr, n, po) default(none)
-    for (size_t i = (po == n / 2 ? 0 : po); i < n - po; i += (po == n / 2 ? n : 2 * po)) {
-      for (size_t j = 0; j < (po == n / 2 ? po : po); ++j) {
-        if (arr[i + j] > arr[i + j + po]) {
-          std::swap(arr[i + j], arr[i + j + po]);
+      for (int i = (int)po; i < (int)(n - po); i += (int)(2 * po)) {
+        for (size_t j = 0; j < po; ++j) {
+          if (arr[i + j] > arr[i + j + po]) {
+            std::swap(arr[i + j], arr[i + j + po]);
+          }
         }
       }
     }
@@ -101,7 +107,6 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
     GetOutput() = data;
     return true;
   }
-
   size_t pow2 = 1;
   while (pow2 < original_size) {
     pow2 <<= 1;
@@ -109,22 +114,24 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   data.resize(pow2, std::numeric_limits<double>::max());
 
   size_t half = pow2 / 2;
-  std::vector<double> left(data.begin(), data.begin() + half);
-  std::vector<double> right(data.begin() + half, data.end());
+  std::vector<double> left(data.begin(), data.begin() + (int)half);
+  std::vector<double> right(data.begin() + (int)half, data.end());
 
 #pragma omp parallel sections shared(left, right)
   {
 #pragma omp section
-    LSDRadixSort(left);
+    {
+      LSDRadixSort(left);
+    }
 #pragma omp section
-    LSDRadixSort(right);
+    {
+      LSDRadixSort(right);
+    }
   }
 
   std::copy(left.begin(), left.end(), data.begin());
-  std::copy(right.begin(), right.end(), data.begin() + half);
-
+  std::copy(right.begin(), right.end(), data.begin() + (int)half);
   BatcherMerge(data, pow2);
-
   data.resize(original_size);
   GetOutput() = data;
   return true;
