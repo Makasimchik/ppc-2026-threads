@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "task/include/task.hpp"
@@ -9,25 +10,23 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-class TitaevSortirovkaBetcheraOMP : public BaseTask {
+class TitaevSortirovkaBetcheraOMP : public ppc::core::Task {
  public:
-  static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
-    return ppc::task::TypeOfTask::kOMP;
-  }
-  explicit TitaevSortirovkaBetcheraOMP(const InType &in);
-
- private:
+  explicit TitaevSortirovkaBetcheraOMP(std::shared_ptr<ppc::core::TaskData> taskData) : Task(std::move(taskData)) {}
   bool ValidationImpl() override;
   bool PreProcessingImpl() override;
   bool RunImpl() override;
   bool PostProcessingImpl() override;
 
-  static void ConvertToKeys(const InType &input, std::vector<uint64_t> &keys);
-  static void RadixSort(std::vector<uint64_t> &keys);
-  static void ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output);
-  void BatcherSort();
+ private:
+  std::vector<double> input_;
+  std::vector<double> output_;
 
-  static void BatcherStep(OutType &result, size_t n, size_t step, size_t stage);
+  static void ConvertToKeys(const std::vector<double> &input, std::vector<uint64_t> &keys);
+  static void RadixSort(std::vector<uint64_t> &keys);
+  static void ConvertFromKeys(const std::vector<uint64_t> &keys, std::vector<double> &output);
+  void BatcherSort();
+  static void BatcherStep(std::vector<double> &result, size_t n, size_t step, size_t stage);
 };
 
 }  // namespace titaev_m_sortirovka_betchera
