@@ -48,15 +48,12 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   if (n <= 1) {
     return;
   }
-
   std::vector<uint64_t> keys(n);
   for (size_t i = 0; i < n; ++i) {
     keys[i] = PackDouble(array[i]);
   }
-
   std::vector<uint64_t> tmp_keys(n);
   std::vector<double> tmp_vals(n);
-
   for (int pass = 0; pass < 8; ++pass) {
     size_t cnt[257] = {0};
     int shift = pass * 8;
@@ -106,7 +103,6 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
     GetOutput() = std::vector<double>();
     return true;
   }
-
   size_t original_size = input.size();
   size_t pow2 = 1;
   while (pow2 < original_size) {
@@ -120,29 +116,30 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
 
   size_t half = pow2 / 2;
   if (half > 0) {
-#pragma omp parallel sections shared(data, half)
+    double *raw_ptr = data.data();  // Работаем через указатель для обхода багов GCC 14
+#pragma omp parallel sections shared(raw_ptr, half, pow2)
     {
 #pragma omp section
       {
         std::vector<double> l(half);
         for (size_t i = 0; i < half; ++i) {
-          l[i] = data[i];
+          l[i] = raw_ptr[i];
         }
         LSDRadixSort(l);
         for (size_t i = 0; i < half; ++i) {
-          data[i] = l[i];
+          raw_ptr[i] = l[i];
         }
       }
 #pragma omp section
       {
-        size_t r_size = data.size() - half;
+        size_t r_size = pow2 - half;
         std::vector<double> r(r_size);
         for (size_t i = 0; i < r_size; ++i) {
-          r[i] = data[half + i];
+          r[i] = raw_ptr[half + i];
         }
         LSDRadixSort(r);
         for (size_t i = 0; i < r_size; ++i) {
-          data[half + i] = r[i];
+          raw_ptr[half + i] = r[i];
         }
       }
     }
