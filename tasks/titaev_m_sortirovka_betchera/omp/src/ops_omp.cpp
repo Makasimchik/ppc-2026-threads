@@ -1,3 +1,4 @@
+// ops_omp.cpp
 #include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
 
 #include <omp.h>
@@ -7,11 +8,6 @@
 #include <limits>
 
 namespace titaev_m_sortirovka_betchera {
-
-TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
-  SetTypeOfTask(GetStaticTypeOfTask());
-  GetInput() = in;
-}
 
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
   return true;

@@ -1,3 +1,4 @@
+// ops_omp.hpp
 #pragma once
 
 #include <vector>
@@ -29,5 +30,10 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   static void BatcherOddEvenMerge(std::vector<double> &arr, size_t n);
   static void CompareSwap(std::vector<double> &arr, size_t i, size_t j);
 };
+
+inline TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
+  SetTypeOfTask(GetStaticTypeOfTask());
+  GetInput() = in;
+}
 
 }  // namespace titaev_m_sortirovka_betchera
