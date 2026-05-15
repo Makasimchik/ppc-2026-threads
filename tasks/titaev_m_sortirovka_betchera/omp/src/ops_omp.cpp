@@ -9,9 +9,8 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
+TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) : BaseTask(in) {
   SetTypeOfTask(GetStaticTypeOfTask());
-  GetInput() = in;
 }
 
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
@@ -26,14 +25,14 @@ bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
 
 uint64_t TitaevSortirovkaBetcheraOMP::PackDouble(double v) noexcept {
   uint64_t bits;
-  std::memcpy(&bits, &v, 8);
+  std::memcpy(&bits, &v, sizeof(double));
   return (bits & 0x8000000000000000ULL) ? ~bits : (bits | 0x8000000000000000ULL);
 }
 
 double TitaevSortirovkaBetcheraOMP::UnpackDouble(uint64_t k) noexcept {
   uint64_t bits = (k & 0x8000000000000000ULL) ? (k & ~0x8000000000000000ULL) : ~k;
   double v;
-  std::memcpy(&v, &bits, 8);
+  std::memcpy(&v, &bits, sizeof(double));
   return v;
 }
 
@@ -101,20 +100,20 @@ void TitaevSortirovkaBetcheraOMP::BatcherOddEvenMerge(std::vector<double> &arr, 
 }
 
 bool TitaevSortirovkaBetcheraOMP::RunImpl() {
-  const auto &input_data = GetInput();
-  if (input_data.empty()) {
+  const auto &input = GetInput();
+  if (input.empty()) {
     GetOutput() = std::vector<double>();
     return true;
   }
 
-  size_t original_size = input_data.size();
+  size_t original_size = input.size();
   size_t pow2 = 1;
   while (pow2 < original_size) {
     pow2 <<= 1;
   }
 
-  std::vector<double> data = input_data;
-  data.resize(pow2, std::numeric_limits<double>::max());
+  std::vector<double> data(pow2, std::numeric_limits<double>::max());
+  std::copy(input.begin(), input.end(), data.begin());
 
   size_t half = pow2 / 2;
   if (half > 0) {
@@ -122,18 +121,25 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
     {
 #pragma omp section
       {
-        std::vector<double> l(data.begin(), data.begin() + (long long)half);
+        std::vector<double> l(half);
+        for (size_t i = 0; i < half; ++i) {
+          l[i] = data[i];
+        }
         LSDRadixSort(l);
-        if (!l.empty()) {
-          std::copy(l.begin(), l.end(), data.begin());
+        for (size_t i = 0; i < half; ++i) {
+          data[i] = l[i];
         }
       }
 #pragma omp section
       {
-        std::vector<double> r(data.begin() + (long long)half, data.end());
+        size_t r_size = data.size() - half;
+        std::vector<double> r(r_size);
+        for (size_t i = 0; i < r_size; ++i) {
+          r[i] = data[half + i];
+        }
         LSDRadixSort(r);
-        if (!r.empty()) {
-          std::copy(r.begin(), r.end(), data.begin() + (long long)half);
+        for (size_t i = 0; i < r_size; ++i) {
+          data[half + i] = r[i];
         }
       }
     }
@@ -142,8 +148,11 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
     LSDRadixSort(data);
   }
 
-  data.resize(original_size);
-  GetOutput() = std::move(data);
+  std::vector<double> res(original_size);
+  for (size_t i = 0; i < original_size; ++i) {
+    res[i] = data[i];
+  }
+  GetOutput() = std::move(res);
   return true;
 }
 
