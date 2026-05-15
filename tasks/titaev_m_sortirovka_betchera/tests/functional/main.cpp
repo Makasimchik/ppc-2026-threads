@@ -16,7 +16,7 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-using TaskFactory = std::function<std::shared_ptr<ppc::task::Task<InType, OutType>>(const InType &)>;
+using TaskFactory = std::function<std::shared_ptr<ppc::task::Task<InType, OutType>>(InType)>;
 using ParamType = std::tuple<TaskFactory, std::string, TestType>;
 
 class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TestType> {
@@ -59,11 +59,11 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
   }
 };
 
-inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(const InType &in) {
+inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(InType in) {
   return std::make_shared<TitaevSortirovkaBetcheraSEQ>(in);
 }
 
-inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(const InType &in) {
+inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(InType in) {
   return std::make_shared<TitaevSortirovkaBetcheraOMP>(in);
 }
 
@@ -75,6 +75,7 @@ static const std::vector<ParamType> kOmpParams = {{CreateOmpTask, "omp_size_128"
                                                   {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
                                                   {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
 
+// Регистрация тестов
 INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kSeqParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
