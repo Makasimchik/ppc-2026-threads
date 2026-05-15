@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
-#include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
 
 namespace titaev_m_sortirovka_betchera {
 
@@ -156,4 +155,3 @@ bool TitaevSortirovkaBetcheraSEQ::PostProcessingImpl() {
 }
 
 }  // namespace titaev_m_sortirovka_betchera
-#include "titaev_m_sortirovka_betchera/omp/src/ops_omp.cpp"
