@@ -1,4 +1,3 @@
-// ops_omp.cpp
 #include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
 
 #include <omp.h>
@@ -8,6 +7,8 @@
 #include <limits>
 
 namespace titaev_m_sortirovka_betchera {
+
+TitaevSortirovkaBetcheraOMP::~TitaevSortirovkaBetcheraOMP() = default;
 
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
   return true;
@@ -111,7 +112,6 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
 
   size_t half = pow2 / 2;
   if (half > 0) {
-    // Получаем указатель на данные, чтобы GCC 14 не выдавал null-dereference error
     double *d_ptr = data.data();
 #pragma omp parallel sections shared(d_ptr, half, pow2)
     {

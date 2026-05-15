@@ -1,4 +1,3 @@
-// ops_omp.hpp
 #pragma once
 
 #include <vector>
@@ -15,7 +14,7 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   }
 
   explicit TitaevSortirovkaBetcheraOMP(const InType &in);
-  virtual ~TitaevSortirovkaBetcheraOMP() = default;
+  virtual ~TitaevSortirovkaBetcheraOMP();
 
  private:
   bool ValidationImpl() override;
