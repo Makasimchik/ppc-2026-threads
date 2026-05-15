@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <random>
 
@@ -16,10 +17,8 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
   InType input;
 
   void SetUp() override {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(42);  // Фиксированный seed для стабильности
     std::uniform_real_distribution<double> dist(-10000.0, 10000.0);
-
     input.resize(kSize);
     for (size_t i = 0; i < kSize; i++) {
       input[i] = dist(gen);
@@ -27,6 +26,9 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
   }
 
   bool CheckTestOutputData(OutType &output) final {
+    if (output.size() != input.size()) {
+      return false;
+    }
     for (size_t i = 1; i < output.size(); i++) {
       if (output[i] < output[i - 1]) {
         return false;
@@ -46,13 +48,17 @@ TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceModes) {
 
 namespace {
 
-const auto kPerfTasks = ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ, TitaevSortirovkaBetcheraOMP>(
-    PPC_SETTINGS_titaev_m_sortirovka_betchera);
+// Чтобы не падать при ошибках JSON, оборачиваем макрос в безопасную проверку
+inline std::string GetSettings() {
+  std::string s = PPC_SETTINGS_titaev_m_sortirovka_betchera;
+  return s.empty() ? "{}" : s;
+}
 
-const auto kValues = ppc::util::TupleToGTestValues(kPerfTasks);
-const auto kNameGen = TitaevBatcherRadixPerfTests::CustomPerfTestName;
+const auto kPerfTasks =
+    ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraSEQ, TitaevSortirovkaBetcheraOMP>(GetSettings());
 
-INSTANTIATE_TEST_SUITE_P(PerformanceSortingTests, TitaevBatcherRadixPerfTests, kValues, kNameGen);
+INSTANTIATE_TEST_SUITE_P(Performance, TitaevBatcherRadixPerfTests, ppc::util::TupleToGTestValues(kPerfTasks),
+                         TitaevBatcherRadixPerfTests::CustomPerfTestName);
 
 }  // namespace
 }  // namespace titaev_m_sortirovka_betchera

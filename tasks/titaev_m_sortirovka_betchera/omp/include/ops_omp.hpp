@@ -16,7 +16,6 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   }
 
   explicit TitaevSortirovkaBetcheraOMP(const InType &in);
-  virtual ~TitaevSortirovkaBetcheraOMP() = default;  // Важно для vtable
 
  private:
   bool ValidationImpl() override;
@@ -31,7 +30,7 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   static void BatcherOddEvenMerge(std::vector<double> &arr, size_t n);
 
   static inline void CompareSwap(std::vector<double> &arr, size_t i, size_t j) {
-    if (arr[i] > arr[j]) {
+    if (i < arr.size() && j < arr.size() && arr[i] > arr[j]) {
       std::swap(arr[i], arr[j]);
     }
   }

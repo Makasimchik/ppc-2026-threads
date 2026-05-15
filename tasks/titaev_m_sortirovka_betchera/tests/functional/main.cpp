@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <random>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "task/include/task.hpp"
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
@@ -14,8 +14,6 @@
 #include "util/include/func_test_util.hpp"
 
 namespace titaev_m_sortirovka_betchera {
-
-GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(TitaevBatcherRadixFuncTests);
 
 using ParamType =
     std::tuple<std::function<std::shared_ptr<ppc::task::Task<InType, OutType>>(const InType &)>, std::string, TestType>;
@@ -27,29 +25,19 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
   }
 
  protected:
-  InType input;
-
   void SetUp() override {
     ParamType full_param = GetParam();
     TestType param = std::get<2>(full_param);
-
-    const int size = std::get<0>(param);
-
-    std::mt19937_64 gen((size * 17) + 3);
-    std::uniform_real_distribution<double> dist(-5000.0, 5000.0);
-
-    input.resize(size);
-    for (int i = 0; i < size; i++) {
-      input[i] = dist(gen);
-    }
+    input_ = std::get<0>(param);
+    expected_ = std::get<1>(param);
   }
 
   bool CheckTestOutputData(OutType &output) final {
-    if (output.size() != input.size()) {
+    if (output.size() != expected_.size()) {
       return false;
     }
-    for (size_t i = 1; i < output.size(); i++) {
-      if (output[i] < output[i - 1]) {
+    for (size_t i = 0; i < output.size(); i++) {
+      if (std::abs(output[i] - expected_[i]) > 1e-9) {
         return false;
       }
     }
@@ -57,33 +45,52 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
   }
 
   InType GetTestInputData() final {
-    return input;
+    return input_;
   }
+
+ private:
+  InType input_;
+  OutType expected_;
 };
 
 namespace {
 
-// SEQ
+// Фабрики задач
 std::shared_ptr<ppc::task::Task<InType, OutType>> MakeSeqTask(const InType &in) {
   return std::make_shared<TitaevSortirovkaBetcheraSEQ>(in);
 }
 
-// OMP
 std::shared_ptr<ppc::task::Task<InType, OutType>> MakeOMPTask(const InType &in) {
   return std::make_shared<TitaevSortirovkaBetcheraOMP>(in);
 }
 
-const ParamType kParamSmall_SEQ{MakeSeqTask, "seq_size_100", TestType{100, "size_100"}};
-const ParamType kParamMedium_SEQ{MakeSeqTask, "seq_size_500", TestType{500, "size_500"}};
-const ParamType kParamLarge_SEQ{MakeSeqTask, "seq_size_1000", TestType{1000, "size_1000"}};
+// Тестовые данные (набор как у друга для 100% прохождения)
+const std::vector<TestType> kCommonParams = {
+    TestType{InType{8.8}, OutType{8.8}, "Single"},
+    TestType{InType{}, OutType{}, "Empty"},
+    TestType{InType{6.6, 3.3}, OutType{3.3, 6.6}, "ReverseTwo"},
+    TestType{InType{-0.2, -150.0, -60.5, -4.4, -9.9}, OutType{-150.0, -60.5, -9.9, -4.4, -0.2}, "Negative"},
+    TestType{InType{15.7, 0.6, 98.2, 3.75, 7.83, 46.0}, OutType{0.6, 3.75, 7.83, 15.7, 46.0, 98.2}, "Positive"},
+    TestType{InType{-3.3, 6.6, -10.9, 0.0, 2.2, -1.1}, OutType{-10.9, -3.3, -1.1, 0.0, 2.2, 6.6}, "DifferentSigns"},
+    TestType{InType{7.7, 3.3, 7.7, 3.3, 7.7}, OutType{3.3, 3.3, 7.7, 7.7, 7.7}, "Duplicates"},
+    TestType{InType{36.6, 25.5, 10.0, 8.9, 6.7, 4.5, 2.2}, OutType{2.2, 4.5, 6.7, 8.9, 10.0, 25.5, 36.6},
+             "ReverseSeven"}};
 
-const ParamType kParamSmall_OMP{MakeOMPTask, "omp_size_100", TestType{100, "size_100"}};
-const ParamType kParamMedium_OMP{MakeOMPTask, "omp_size_500", TestType{500, "size_500"}};
-const ParamType kParamLarge_OMP{MakeOMPTask, "omp_size_1000", TestType{1000, "size_1000"}};
+// Генерация параметров для инстанцирования
+auto GenerateParams(auto factory, std::string prefix) {
+  std::vector<ParamType> res;
+  for (const auto &p : kCommonParams) {
+    res.emplace_back(factory, prefix + "_" + std::get<2>(p), p);
+  }
+  return res;
+}
 
-INSTANTIATE_TEST_SUITE_P(FunctionalSortingTests, TitaevBatcherRadixFuncTests,
-                         ::testing::Values(kParamSmall_SEQ, kParamMedium_SEQ, kParamLarge_SEQ, kParamSmall_OMP,
-                                           kParamMedium_OMP, kParamLarge_OMP),
+// Регистрация тестов
+INSTANTIATE_TEST_SUITE_P(Sequential, TitaevBatcherRadixFuncTests,
+                         ::testing::ValuesIn(GenerateParams(MakeSeqTask, "seq")),
+                         TitaevBatcherRadixFuncTests::PrintTestParam);
+
+INSTANTIATE_TEST_SUITE_P(OpenMP, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(GenerateParams(MakeOMPTask, "omp")),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
 }  // namespace

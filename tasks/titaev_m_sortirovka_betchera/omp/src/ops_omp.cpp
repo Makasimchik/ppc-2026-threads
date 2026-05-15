@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 namespace titaev_m_sortirovka_betchera {
 
@@ -17,9 +18,11 @@ TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
 bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
   return true;
 }
+
 bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
   return true;
 }
+
 bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
   return true;
 }
@@ -51,7 +54,7 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   if (n <= 1) {
     return;
   }
-  constexpr int kPasses = 8;
+
   std::vector<uint64_t> keys(n);
   for (size_t i = 0; i < n; ++i) {
     keys[i] = PackDouble(array[i]);
@@ -60,23 +63,27 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   std::vector<uint64_t> tmp_keys(n);
   std::vector<double> tmp_vals(n);
 
-  for (int pass = 0; pass < kPasses; ++pass) {
+  for (int pass = 0; pass < 8; ++pass) {
     const int shift = pass * 8;
     size_t cnt[257] = {0};
+
     for (size_t i = 0; i < n; ++i) {
       ++cnt[((keys[i] >> shift) & 0xFF) + 1];
     }
     for (int i = 0; i < 256; ++i) {
       cnt[i + 1] += cnt[i];
     }
+
     for (size_t i = 0; i < n; ++i) {
-      size_t pos = cnt[(keys[i] >> shift) & 0xFF]++;
+      size_t d = (keys[i] >> shift) & 0xFF;
+      size_t pos = cnt[d]++;
       tmp_keys[pos] = keys[i];
       tmp_vals[pos] = array[i];
     }
     keys.swap(tmp_keys);
     array.swap(tmp_vals);
   }
+
   for (size_t i = 0; i < n; ++i) {
     array[i] = UnpackDouble(keys[i]);
   }
@@ -103,18 +110,21 @@ void TitaevSortirovkaBetcheraOMP::BatcherOddEvenMerge(std::vector<double> &arr, 
 bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   auto data = GetInput();
   const size_t original_size = data.size();
+
   if (original_size <= 1) {
     GetOutput() = data;
     return true;
   }
+
   size_t pow2 = 1;
   while (pow2 < original_size) {
     pow2 <<= 1;
   }
-  data.resize(pow2, std::numeric_limits<double>::max());
 
+  data.resize(pow2, std::numeric_limits<double>::max());
   const size_t half = pow2 / 2;
-#pragma omp parallel sections default(none) shared(data, half)
+
+#pragma omp parallel sections shared(data)
   {
 #pragma omp section
     {
@@ -131,6 +141,7 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   }
 
   BatcherOddEvenMerge(data, pow2);
+
   data.resize(original_size);
   GetOutput() = data;
   return true;
