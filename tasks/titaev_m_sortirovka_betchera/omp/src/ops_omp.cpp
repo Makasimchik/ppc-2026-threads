@@ -3,10 +3,8 @@
 #include <omp.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <limits>
-#include <vector>
 
 namespace titaev_m_sortirovka_betchera {
 
@@ -53,10 +51,7 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   if (n <= 1) {
     return;
   }
-  constexpr int kBits = 8;
-  constexpr int kBuckets = 1 << kBits;
   constexpr int kPasses = 8;
-
   std::vector<uint64_t> keys(n);
   for (size_t i = 0; i < n; ++i) {
     keys[i] = PackDouble(array[i]);
@@ -66,16 +61,16 @@ void TitaevSortirovkaBetcheraOMP::LSDRadixSort(std::vector<double> &array) {
   std::vector<double> tmp_vals(n);
 
   for (int pass = 0; pass < kPasses; ++pass) {
-    const int shift = pass * kBits;
-    std::vector<size_t> cnt(kBuckets + 1, 0);
+    const int shift = pass * 8;
+    size_t cnt[257] = {0};
     for (size_t i = 0; i < n; ++i) {
-      ++cnt[((keys[i] >> shift) & (kBuckets - 1)) + 1];
+      ++cnt[((keys[i] >> shift) & 0xFF) + 1];
     }
-    for (int i = 0; i < kBuckets; ++i) {
+    for (int i = 0; i < 256; ++i) {
       cnt[i + 1] += cnt[i];
     }
     for (size_t i = 0; i < n; ++i) {
-      size_t pos = cnt[(keys[i] >> shift) & (kBuckets - 1)]++;
+      size_t pos = cnt[(keys[i] >> shift) & 0xFF]++;
       tmp_keys[pos] = keys[i];
       tmp_vals[pos] = array[i];
     }
