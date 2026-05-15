@@ -1,6 +1,5 @@
-// ops_omp.hpp
 #pragma once
-
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -14,9 +13,7 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kOMP;
   }
-
   explicit TitaevSortirovkaBetcheraOMP(const InType &in);
-  virtual ~TitaevSortirovkaBetcheraOMP();
 
  private:
   bool ValidationImpl() override;
@@ -24,12 +21,12 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
   bool RunImpl() override;
   bool PostProcessingImpl() override;
 
-  static uint64_t PackDouble(double v) noexcept;
-  static double UnpackDouble(uint64_t k) noexcept;
+  static void ConvertToKeys(const InType &input, std::vector<uint64_t> &keys);
+  static void RadixSortParallel(std::vector<uint64_t> &keys);
+  static void ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output);
+  void BatcherSortParallel();
 
-  static void LSDRadixSort(std::vector<double> &array);
-  static void BatcherOddEvenMerge(std::vector<double> &arr, size_t n);
-  static void CompareSwap(std::vector<double> &arr, size_t i, size_t j);
+  static void BatcherStepParallel(OutType &result, size_t n, size_t step, size_t stage);
 };
 
 }  // namespace titaev_m_sortirovka_betchera
