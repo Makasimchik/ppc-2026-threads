@@ -1,4 +1,3 @@
-// ops_omp.cpp
 #include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
 
 #include <omp.h>
@@ -6,9 +5,29 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace titaev_m_sortirovka_betchera {
+
+TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
+  SetTypeOfTask(GetStaticTypeOfTask());
+  GetInput() = in;
+}
+
+TitaevSortirovkaBetcheraOMP::~TitaevSortirovkaBetcheraOMP() = default;
+
+bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
+  return true;
+}
+
+bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
+  return true;
+}
+
+bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
+  return true;
+}
 
 uint64_t TitaevSortirovkaBetcheraOMP::PackDouble(double v) noexcept {
   uint64_t bits;
@@ -81,6 +100,65 @@ void TitaevSortirovkaBetcheraOMP::BatcherOddEvenMerge(std::vector<double> &arr, 
       }
     }
   }
+}
+
+bool TitaevSortirovkaBetcheraOMP::RunImpl() {
+  const auto &input = GetInput();
+  if (input.empty()) {
+    GetOutput() = std::vector<double>();
+    return true;
+  }
+  size_t original_size = input.size();
+  size_t pow2 = 1;
+  while (pow2 < original_size) {
+    pow2 <<= 1;
+  }
+
+  std::vector<double> data(pow2, std::numeric_limits<double>::max());
+  for (size_t i = 0; i < original_size; ++i) {
+    data[i] = input[i];
+  }
+
+  size_t half = pow2 / 2;
+  if (half > 0) {
+    double *d_ptr = data.data();
+#pragma omp parallel sections shared(d_ptr, half, pow2)
+    {
+#pragma omp section
+      {
+        std::vector<double> l(half);
+        for (size_t i = 0; i < half; ++i) {
+          l[i] = d_ptr[i];
+        }
+        LSDRadixSort(l);
+        for (size_t i = 0; i < half; ++i) {
+          d_ptr[i] = l[i];
+        }
+      }
+#pragma omp section
+      {
+        size_t rs = pow2 - half;
+        std::vector<double> r(rs);
+        for (size_t i = 0; i < rs; ++i) {
+          r[i] = d_ptr[half + i];
+        }
+        LSDRadixSort(r);
+        for (size_t i = 0; i < rs; ++i) {
+          d_ptr[half + i] = r[i];
+        }
+      }
+    }
+    BatcherOddEvenMerge(data, pow2);
+  } else {
+    LSDRadixSort(data);
+  }
+
+  std::vector<double> result(original_size);
+  for (size_t i = 0; i < original_size; ++i) {
+    result[i] = data[i];
+  }
+  GetOutput() = std::move(result);
+  return true;
 }
 
 }  // namespace titaev_m_sortirovka_betchera
