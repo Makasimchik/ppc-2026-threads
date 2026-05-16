@@ -5,8 +5,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <numeric>
 #include <vector>
+
+#include "titaev_m_sortirovka_betchera/common/include/common.hpp"
 
 namespace titaev_m_sortirovka_betchera {
 
@@ -34,6 +35,54 @@ double OrderedUintToDouble(uint64_t x) {
   std::memcpy(&result, &x, sizeof(double));
   return result;
 }
+
+void RadixPass(int pass, size_t n, const std::vector<uint64_t> &src, std::vector<uint64_t> &dest) {
+  constexpr int kBits = 8;
+  constexpr int kBuckets = 256;
+  int num_threads = omp_get_max_threads();
+  std::vector<std::vector<size_t>> local_counts(num_threads, std::vector<size_t>(kBuckets, 0));
+
+#pragma omp parallel default(none) shared(src, local_counts, n, pass, kBits)
+  {
+    int tid = omp_get_thread_num();
+#pragma omp for
+    for (size_t i = 0; i < n; ++i) {
+      size_t bucket = (src[i] >> (static_cast<size_t>(pass) * kBits)) & 255;
+      local_counts[static_cast<size_t>(tid)][bucket]++;
+    }
+  }
+
+  std::vector<size_t> common_counts(kBuckets, 0);
+  for (const auto &l_count : local_counts) {
+    for (size_t b = 0; b < kBuckets; ++b) {
+      common_counts[b] += l_count[b];
+    }
+  }
+
+  std::vector<size_t> prefixes(kBuckets, 0);
+  for (size_t b = 1; b < kBuckets; ++b) {
+    prefixes[b] = prefixes[b - 1] + common_counts[b - 1];
+  }
+
+  std::vector<std::vector<size_t>> offsets(num_threads, std::vector<size_t>(kBuckets));
+  for (size_t b = 0; b < kBuckets; ++b) {
+    size_t curr = prefixes[b];
+    for (int t = 0; t < num_threads; ++t) {
+      offsets[static_cast<size_t>(t)][b] = curr;
+      curr += local_counts[static_cast<size_t>(t)][b];
+    }
+  }
+
+#pragma omp parallel default(none) shared(src, dest, offsets, n, pass, kBits)
+  {
+    int tid = omp_get_thread_num();
+#pragma omp for
+    for (size_t i = 0; i < n; ++i) {
+      size_t bucket = (src[i] >> (static_cast<size_t>(pass) * kBits)) & 255;
+      dest[offsets[static_cast<size_t>(tid)][bucket]++] = src[i];
+    }
+  }
+}
 }  // namespace
 
 TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
@@ -54,8 +103,8 @@ bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
 void TitaevSortirovkaBetcheraOMP::ConvertToKeys(const InType &input, std::vector<uint64_t> &keys) {
   const size_t n = input.size();
 #pragma omp parallel for default(none) shared(keys, input, n)
-  for (int64_t i = 0; i < static_cast<int64_t>(n); i++) {
-    keys[static_cast<size_t>(i)] = DoubleToOrderedUint(input[static_cast<size_t>(i)]);
+  for (size_t i = 0; i < n; i++) {
+    keys[i] = DoubleToOrderedUint(input[i]);
   }
 }
 
@@ -64,57 +113,13 @@ void TitaevSortirovkaBetcheraOMP::RadixSortParallel(std::vector<uint64_t> &keys)
   if (n <= 1) {
     return;
   }
-
-  constexpr int kBits = 8;
-  constexpr int kBuckets = 1 << kBits;
-  constexpr int kPasses = 64 / kBits;
-
   std::vector<uint64_t> tmp(n);
-
-  for (int pass = 0; pass < kPasses; ++pass) {  // ++pass
-    std::vector<std::vector<size_t>> local_counts(omp_get_max_threads(), std::vector<size_t>(kBuckets, 0));
-
-#pragma omp parallel default(none) shared(keys, local_counts, n, pass, kBits, kBuckets)
-    {
-      int tid = omp_get_thread_num();
-#pragma omp for
-      for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
-        size_t bucket = (keys[static_cast<size_t>(i)] >> (pass * kBits)) & (kBuckets - 1);
-        local_counts[tid][bucket]++;
-      }
+  for (int pass = 0; pass < 8; ++pass) {
+    if (pass % 2 == 0) {
+      RadixPass(pass, n, keys, tmp);
+    } else {
+      RadixPass(pass, n, tmp, keys);
     }
-
-    std::vector<size_t> common_counts(kBuckets, 0);
-    for (const auto &thread_local_count : local_counts) {
-      for (size_t b_idx = 0; b_idx < kBuckets; ++b_idx) {
-        common_counts[b_idx] += thread_local_count[b_idx];
-      }
-    }
-
-    std::vector<size_t> prefixes(kBuckets, 0);
-    for (size_t b_idx = 1; b_idx < kBuckets; ++b_idx) {
-      prefixes[b_idx] = prefixes[b_idx - 1] + common_counts[b_idx - 1];
-    }
-
-    std::vector<std::vector<size_t>> thread_offsets(omp_get_max_threads(), std::vector<size_t>(kBuckets, 0));
-    for (size_t b_idx = 0; b_idx < kBuckets; ++b_idx) {
-      size_t current_offset = prefixes[b_idx];
-      for (int t_idx = 0; t_idx < omp_get_max_threads(); ++t_idx) {
-        thread_offsets[static_cast<size_t>(t_idx)][b_idx] = current_offset;
-        current_offset += local_counts[static_cast<size_t>(t_idx)][b_idx];
-      }
-    }
-
-#pragma omp parallel default(none) shared(keys, tmp, thread_offsets, n, pass, kBits, kBuckets)
-    {
-      int tid = omp_get_thread_num();
-#pragma omp for
-      for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
-        size_t bucket = (keys[static_cast<size_t>(i)] >> (pass * kBits)) & (kBuckets - 1);
-        tmp[thread_offsets[static_cast<size_t>(tid)][bucket]++] = keys[static_cast<size_t>(i)];
-      }
-    }
-    keys.swap(tmp);
   }
 }
 
@@ -122,19 +127,19 @@ void TitaevSortirovkaBetcheraOMP::ConvertFromKeys(const std::vector<uint64_t> &k
   const size_t n = keys.size();
   output.resize(n);
 #pragma omp parallel for default(none) shared(keys, output, n)
-  for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
-    output[static_cast<size_t>(i)] = OrderedUintToDouble(keys[static_cast<size_t>(i)]);
+  for (size_t i = 0; i < n; ++i) {
+    output[i] = OrderedUintToDouble(keys[i]);
   }
 }
 
 void TitaevSortirovkaBetcheraOMP::BatcherStepParallel(OutType &result, size_t n, size_t step, size_t stage) {
 #pragma omp parallel for default(none) shared(result, n, step, stage)
-  for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
-    size_t j = static_cast<size_t>(i) ^ stage;
-    if (j > static_cast<size_t>(i) && j < n) {
-      const bool ascending = (static_cast<size_t>(i) & step) == 0;
-      if (ascending ? (result[static_cast<size_t>(i)] > result[j]) : (result[static_cast<size_t>(i)] < result[j])) {
-        std::swap(result[static_cast<size_t>(i)], result[j]);
+  for (size_t i = 0; i < n; ++i) {
+    size_t j = i ^ stage;
+    if (j > i && j < n) {
+      const bool ascending = (i & step) == 0;
+      if (ascending ? (result[i] > result[j]) : (result[i] < result[j])) {
+        std::swap(result[i], result[j]);
       }
     }
   }

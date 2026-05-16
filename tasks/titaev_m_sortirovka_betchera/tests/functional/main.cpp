@@ -16,7 +16,8 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-using TaskFactory = std::function<std::shared_ptr<ppc::task::Task<InType, OutType>>(InType)>;
+// 1. Используем const InType& вместо InType, чтобы избежать performance-unnecessary-value-param
+using TaskFactory = std::function<std::shared_ptr<ppc::task::Task<InType, OutType>>(const InType &)>;
 using ParamType = std::tuple<TaskFactory, std::string, TestType>;
 
 class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TestType> {
@@ -38,8 +39,8 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
     std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
     input.resize(static_cast<size_t>(size));
-    for (int i = 0; i < size; i++) {
-      input[static_cast<size_t>(i)] = dist(gen);
+    for (size_t i = 0; i < input.size(); i++) {
+      input[i] = dist(gen);
     }
   }
 
@@ -60,22 +61,27 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
   }
 };
 
-static std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(InType in) {
+// 2. Второе (анонимное) пространство имен для функций и параметров
+namespace {
+
+std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(const InType &in) {
   return std::make_shared<TitaevSortirovkaBetcheraSEQ>(in);
 }
 
-static std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(InType in) {
+std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(const InType &in) {
   return std::make_shared<TitaevSortirovkaBetcheraOMP>(in);
 }
 
-static const std::vector<ParamType> kSeqParams = {{CreateSeqTask, "seq_size_128", TestType{128, "size_128"}},
-                                                  {CreateSeqTask, "seq_size_512", TestType{512, "size_512"}},
-                                                  {CreateSeqTask, "seq_size_1024", TestType{1024, "size_1024"}}};
+const std::vector<ParamType> kSeqParams = {{CreateSeqTask, "seq_size_128", TestType{128, "size_128"}},
+                                           {CreateSeqTask, "seq_size_512", TestType{512, "size_512"}},
+                                           {CreateSeqTask, "seq_size_1024", TestType{1024, "size_1024"}}};
 
-static const std::vector<ParamType> kOmpParams = {{CreateOmpTask, "omp_size_128", TestType{128, "size_128"}},
-                                                  {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
-                                                  {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
+const std::vector<ParamType> kOmpParams = {{CreateOmpTask, "omp_size_128", TestType{128, "size_128"}},
+                                           {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
+                                           {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
+}  // namespace
 
+// Регистрация тестов внутри основного пространства имен
 INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kSeqParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
