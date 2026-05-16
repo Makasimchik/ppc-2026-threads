@@ -33,12 +33,13 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
     TestType param = std::get<2>(full_param);
     const int size = std::get<0>(param);
 
-    std::mt19937_64 gen(static_cast<unsigned>(size) + 42);
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
     std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
-    input.resize(size);
+    input.resize(static_cast<size_t>(size));
     for (int i = 0; i < size; i++) {
-      input[i] = dist(gen);
+      input[static_cast<size_t>(i)] = dist(gen);
     }
   }
 
@@ -59,11 +60,11 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
   }
 };
 
-inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(InType in) {
+static std::shared_ptr<ppc::task::Task<InType, OutType>> CreateSeqTask(InType in) {
   return std::make_shared<TitaevSortirovkaBetcheraSEQ>(in);
 }
 
-inline std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(InType in) {
+static std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(InType in) {
   return std::make_shared<TitaevSortirovkaBetcheraOMP>(in);
 }
 
@@ -75,7 +76,6 @@ static const std::vector<ParamType> kOmpParams = {{CreateOmpTask, "omp_size_128"
                                                   {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
                                                   {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
 
-// Регистрация тестов
 INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kSeqParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 

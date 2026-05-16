@@ -16,7 +16,8 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
   InType input;
 
   void SetUp() override {
-    std::mt19937_64 gen(12345);
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
     std::uniform_real_distribution<double> dist(-100000.0, 100000.0);
 
     input.resize(kSize);
