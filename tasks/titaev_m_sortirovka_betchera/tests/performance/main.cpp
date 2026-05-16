@@ -20,8 +20,8 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
     std::uniform_real_distribution<double> dist(-100000.0, 100000.0);
 
     input.resize(kSize);
-    for (size_t i = 0; i < kSize; i++) {
-      input[i] = dist(gen);
+    for (auto &val : input) {
+      val = dist(gen);
     }
   }
 

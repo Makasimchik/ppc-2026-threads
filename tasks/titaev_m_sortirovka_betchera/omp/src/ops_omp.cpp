@@ -54,22 +54,22 @@ void RadixPass(int pass, size_t n, const std::vector<uint64_t> &src, std::vector
 
   std::vector<size_t> common_counts(kBuckets, 0);
   for (const auto &l_count : local_counts) {
-    for (size_t b = 0; b < kBuckets; ++b) {
-      common_counts[b] += l_count[b];
+    for (size_t b_idx = 0; b_idx < kBuckets; ++b_idx) {
+      common_counts[b_idx] += l_count[b_idx];
     }
   }
 
   std::vector<size_t> prefixes(kBuckets, 0);
-  for (size_t b = 1; b < kBuckets; ++b) {
-    prefixes[b] = prefixes[b - 1] + common_counts[b - 1];
+  for (size_t b_idx = 1; b_idx < kBuckets; ++b_idx) {
+    prefixes[b_idx] = prefixes[b_idx - 1] + common_counts[b_idx - 1];
   }
 
   std::vector<std::vector<size_t>> offsets(num_threads, std::vector<size_t>(kBuckets));
-  for (size_t b = 0; b < kBuckets; ++b) {
-    size_t curr = prefixes[b];
-    for (int t = 0; t < num_threads; ++t) {
-      offsets[static_cast<size_t>(t)][b] = curr;
-      curr += local_counts[static_cast<size_t>(t)][b];
+  for (size_t b_idx = 0; b_idx < kBuckets; ++b_idx) {
+    size_t curr = prefixes[b_idx];
+    for (int t_idx = 0; t_idx < num_threads; ++t_idx) {
+      offsets[static_cast<size_t>(t_idx)][b_idx] = curr;
+      curr += local_counts[static_cast<size_t>(t_idx)][b_idx];
     }
   }
 

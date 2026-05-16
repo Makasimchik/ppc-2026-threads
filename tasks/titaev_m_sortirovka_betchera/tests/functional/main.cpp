@@ -38,8 +38,8 @@ class TitaevBatcherRadixFuncTests : public ppc::util::BaseRunFuncTests<InType, O
     std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
     input.resize(static_cast<size_t>(size));
-    for (size_t i = 0; i < input.size(); i++) {
-      input[i] = dist(gen);
+    for (auto &val : input) {
+      val = dist(gen);
     }
   }
 
@@ -72,12 +72,11 @@ std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(InType in) {
 
 const std::vector<ParamType> kSeqParams = {{CreateSeqTask, "seq_size_128", TestType{128, "size_128"}},
                                            {CreateSeqTask, "seq_size_512", TestType{512, "size_512"}},
-                                           {CreateSeqTask, "seq_size_1024", TestType{1024, "size_1024"}}};
+                                           {CreateSeqTask, "seq_size{1024", TestType{1024, "size_1024"}}};
 
 const std::vector<ParamType> kOmpParams = {{CreateOmpTask, "omp_size_128", TestType{128, "size_128"}},
                                            {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
                                            {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
-}  // namespace
 
 INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kSeqParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
@@ -85,4 +84,5 @@ INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing
 INSTANTIATE_TEST_SUITE_P(OpenMPTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kOmpParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
+}  // namespace
 }  // namespace titaev_m_sortirovka_betchera
