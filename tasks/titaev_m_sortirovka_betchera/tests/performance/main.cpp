@@ -4,7 +4,7 @@
 #include <random>
 
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
-#include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
+#include "titaev_m_sortirovka_betchera/tbb/include/ops_tbb.hpp"
 #include "util/include/perf_test_util.hpp"
 
 namespace titaev_m_sortirovka_betchera {
@@ -42,14 +42,14 @@ class TitaevBatcherRadixPerfTests : public ppc::util::BaseRunPerfTests<InType, O
   }
 };
 
-TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceOMP) {
+TEST_P(TitaevBatcherRadixPerfTests, RunPerformanceTBB) {
   ExecuteTest(GetParam());
 }
 
 namespace {
 
 const auto kPerfTasks =
-    ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraOMP>(PPC_SETTINGS_titaev_m_sortirovka_betchera);
+    ppc::util::MakeAllPerfTasks<InType, TitaevSortirovkaBetcheraTBB>(PPC_SETTINGS_titaev_m_sortirovka_betchera);
 
 const auto kValues = ppc::util::TupleToGTestValues(kPerfTasks);
 const auto kNameGen = TitaevBatcherRadixPerfTests::CustomPerfTestName;
