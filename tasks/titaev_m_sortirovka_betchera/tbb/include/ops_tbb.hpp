@@ -1,5 +1,5 @@
 #pragma once
-#include <cstddef>
+
 #include <cstdint>
 #include <vector>
 
@@ -25,6 +25,7 @@ class TitaevSortirovkaBetcheraTBB : public BaseTask {
   static void RadixSortParallel(std::vector<uint64_t> &keys);
   static void ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output);
   void BatcherSortParallel();
+  static void BatcherStepParallel(OutType &res, size_t n, size_t step, size_t stage);
 };
 
 }  // namespace titaev_m_sortirovka_betchera
