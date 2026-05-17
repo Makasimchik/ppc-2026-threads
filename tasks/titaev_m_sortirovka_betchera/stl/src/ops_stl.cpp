@@ -33,9 +33,9 @@ double UnpackDouble(uint64_t bits) {
   } else {
     x_val = ~x_val;
   }
-  double value = 0.0;
-  std::memcpy(&value, &x_val, sizeof(double));
-  return value;
+  double res_val = 0.0;
+  std::memcpy(&res_val, &x_val, sizeof(double));
+  return res_val;
 }
 }  // namespace
 
@@ -154,7 +154,7 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   return true;
 }
 
-bool TitaevSortirovkaBetcheraSTL::RunImpl() {
+bool TitaevSortirovkaBetcheraSTL::PostProcessingImpl() {
   return true;
 }
 
