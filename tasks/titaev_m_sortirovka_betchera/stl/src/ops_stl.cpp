@@ -1,6 +1,8 @@
 #include "titaev_m_sortirovka_betchera/stl/include/ops_stl.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -57,7 +59,7 @@ void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &key
   const size_t count_n = keys.size();
   std::vector<uint64_t> tmp(count_n);
   for (int pass = 0; pass < 8; ++pass) {
-    size_t count[256] = {0};
+    std::array<size_t, 256> count = {0};
     for (size_t i = 0; i < count_n; ++i) {
       count[(keys[i] >> (static_cast<size_t>(pass) * 8)) & 255]++;
     }
@@ -77,35 +79,39 @@ void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr, size_t i, size_t 
   }
 }
 
-void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr, size_t count_n) {
+void TitaevSortirovkaBetcheraSTL::BatcherStepThreads(OutType &arr, size_t count_n, size_t step, size_t stage) {
   const size_t num_threads = std::thread::hardware_concurrency();
+  std::vector<std::thread> threads;
+  size_t chunk_size = (count_n + num_threads - 1) / num_threads;
+
+  for (size_t t_idx = 0; t_idx < num_threads; ++t_idx) {
+    size_t start = t_idx * chunk_size;
+    size_t end = std::min(start + chunk_size, count_n);
+    if (start >= end) {
+      break;
+    }
+
+    threads.emplace_back([&arr, start, end, stage, step, count_n]() {
+      for (size_t i = start; i < end; ++i) {
+        size_t j = i ^ stage;
+        if (j > i && j < count_n) {
+          bool ascending = (i & step) == 0;
+          CompareAndSwap(arr, i, j, ascending);
+        }
+      }
+    });
+  }
+  for (auto &th : threads) {
+    if (th.joinable()) {
+      th.join();
+    }
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr, size_t count_n) {
   for (size_t step = 1; step < count_n; step <<= 1) {
     for (size_t stage = step; stage > 0; stage >>= 1) {
-      std::vector<std::thread> threads;
-      size_t chunk_size = (count_n + num_threads - 1) / num_threads;
-
-      for (size_t t_idx = 0; t_idx < num_threads; ++t_idx) {
-        size_t start = t_idx * chunk_size;
-        size_t end = std::min(start + chunk_size, count_n);
-        if (start >= end) {
-          break;
-        }
-
-        threads.emplace_back([&arr, start, end, stage, step, count_n]() {
-          for (size_t i = start; i < end; ++i) {
-            size_t j = i ^ stage;
-            if (j > i && j < count_n) {
-              bool ascending = (i & step) == 0;
-              CompareAndSwap(arr, i, j, ascending);
-            }
-          }
-        });
-      }
-      for (auto &th : threads) {
-        if (th.joinable()) {
-          th.join();
-        }
-      }
+      BatcherStepThreads(arr, count_n, step, stage);
     }
   }
 }
