@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <execution>
-#include <numeric>
+#include <limits>
+#include <thread>
 #include <vector>
 
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
@@ -12,28 +12,29 @@
 namespace titaev_m_sortirovka_betchera {
 
 namespace {
-uint64_t DoubleToOrderedUint(double value) {
-  uint64_t x_val = 0;
-  std::memcpy(&x_val, &value, sizeof(double));
+uint64_t PackDouble(double value) {
+  uint64_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(double));
   constexpr uint64_t kSignMask = (1ULL << 63);
-  if ((x_val & kSignMask) != 0ULL) {
-    x_val = ~x_val;
+  if ((bits & kSignMask) != 0ULL) {
+    bits = ~bits;
   } else {
-    x_val ^= kSignMask;
+    bits ^= kSignMask;
   }
-  return x_val;
+  return bits;
 }
 
-double OrderedUintToDouble(uint64_t x_val) {
+double UnpackDouble(uint64_t bits) {
   constexpr uint64_t kSignMask = (1ULL << 63);
+  uint64_t x_val = bits;
   if ((x_val & kSignMask) != 0ULL) {
     x_val ^= kSignMask;
   } else {
     x_val = ~x_val;
   }
-  double res_val = 0.0;
-  std::memcpy(&res_val, &x_val, sizeof(double));
-  return res_val;
+  double value = 0.0;
+  std::memcpy(&value, &x_val, sizeof(double));
+  return value;
 }
 }  // namespace
 
@@ -52,67 +53,97 @@ bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
   return true;
 }
 
-void TitaevSortirovkaBetcheraSTL::ConvertToKeys(const InType &input, std::vector<uint64_t> &keys) {
-  const size_t n = input.size();
-  std::vector<size_t> indices(n);
-  std::iota(indices.begin(), indices.end(), 0);
-  std::for_each(std::execution::par, indices.begin(), indices.end(),
-                [&](size_t i) { keys[i] = DoubleToOrderedUint(input[i]); });
-}
-
-void TitaevSortirovkaBetcheraSTL::RadixSortParallel(std::vector<uint64_t> &keys) {
-  if (keys.size() <= 1) {
-    return;
+void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &keys) {
+  const size_t count_n = keys.size();
+  std::vector<uint64_t> tmp(count_n);
+  for (int pass = 0; pass < 8; ++pass) {
+    size_t count[256] = {0};
+    for (size_t i = 0; i < count_n; ++i) {
+      count[(keys[i] >> (static_cast<size_t>(pass) * 8)) & 255]++;
+    }
+    for (size_t i = 1; i < 256; ++i) {
+      count[i] += count[i - 1];
+    }
+    for (size_t i = count_n; i > 0; --i) {
+      tmp[--count[(keys[i - 1] >> (static_cast<size_t>(pass) * 8)) & 255]] = keys[i - 1];
+    }
+    keys.swap(tmp);
   }
-  std::sort(std::execution::par, keys.begin(), keys.end());
 }
 
-void TitaevSortirovkaBetcheraSTL::ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output) {
-  const size_t n = keys.size();
-  output.resize(n);
-  std::vector<size_t> indices(n);
-  std::iota(indices.begin(), indices.end(), 0);
-  std::for_each(std::execution::par, indices.begin(), indices.end(),
-                [&](size_t i) { output[i] = OrderedUintToDouble(keys[i]); });
+void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr, size_t i, size_t j, bool ascending) {
+  if (ascending ? (arr[i] > arr[j]) : (arr[i] < arr[j])) {
+    std::swap(arr[i], arr[j]);
+  }
 }
 
-void TitaevSortirovkaBetcheraSTL::BatcherSortParallel() {
-  auto &res_vec = GetOutput();
-  const size_t total_n = res_vec.size();
+void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr, size_t count_n) {
+  const size_t num_threads = std::thread::hardware_concurrency();
+  for (size_t step = 1; step < count_n; step <<= 1) {
+    for (size_t stage = step; stage > 0; stage >>= 1) {
+      std::vector<std::thread> threads;
+      size_t chunk_size = (count_n + num_threads - 1) / num_threads;
 
-  for (size_t step_size = 1; step_size < total_n; step_size <<= 1) {
-    for (size_t stage_dist = step_size; stage_dist > 0; stage_dist >>= 1) {
-      std::vector<size_t> indices(total_n);
-      std::iota(indices.begin(), indices.end(), 0);
-
-      std::for_each(std::execution::par, indices.begin(), indices.end(), [&](size_t i) {
-        size_t j_idx = i ^ stage_dist;
-        if (j_idx > i && j_idx < total_n) {
-          bool is_asc = (i & step_size) == 0;
-          if (is_asc ? (res_vec[i] > res_vec[j_idx]) : (res_vec[i] < res_vec[j_idx])) {
-            std::swap(res_vec[i], res_vec[j_idx]);
-          }
+      for (size_t t_idx = 0; t_idx < num_threads; ++t_idx) {
+        size_t start = t_idx * chunk_size;
+        size_t end = std::min(start + chunk_size, count_n);
+        if (start >= end) {
+          break;
         }
-      });
+
+        threads.emplace_back([&arr, start, end, stage, step, count_n]() {
+          for (size_t i = start; i < end; ++i) {
+            size_t j = i ^ stage;
+            if (j > i && j < count_n) {
+              bool ascending = (i & step) == 0;
+              CompareAndSwap(arr, i, j, ascending);
+            }
+          }
+        });
+      }
+      for (auto &th : threads) {
+        if (th.joinable()) {
+          th.join();
+        }
+      }
     }
   }
 }
 
 bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   auto &input_data = GetInput();
-  const size_t data_size = input_data.size();
-  if (data_size <= 1) {
+  size_t original_size = input_data.size();
+  if (original_size <= 1) {
     return true;
   }
 
-  std::vector<uint64_t> keys_vec(data_size);
-  ConvertToKeys(input_data, keys_vec);
-  RadixSortParallel(keys_vec);
-  ConvertFromKeys(keys_vec, GetOutput());
-
-  if ((data_size & (data_size - 1)) == 0) {
-    BatcherSortParallel();
+  size_t count_n = 1;
+  while (count_n < original_size) {
+    count_n <<= 1;
   }
+
+  std::vector<uint64_t> keys(count_n, PackDouble(std::numeric_limits<double>::max()));
+  for (size_t i = 0; i < original_size; ++i) {
+    keys[i] = PackDouble(input_data[i]);
+  }
+
+  size_t half = count_n / 2;
+  std::vector<uint64_t> left_keys(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(half));
+  std::vector<uint64_t> right_keys(keys.begin() + static_cast<std::ptrdiff_t>(half), keys.end());
+
+  std::thread radix_thread([&]() { RadixSortSequential(left_keys); });
+  RadixSortSequential(right_keys);
+  radix_thread.join();
+
+  auto &output = GetOutput();
+  output.resize(count_n);
+  for (size_t i = 0; i < half; ++i) {
+    output[i] = UnpackDouble(left_keys[i]);
+    output[i + half] = UnpackDouble(right_keys[i]);
+  }
+
+  BatcherMergeParallel(output, count_n);
+  output.resize(original_size);
   return true;
 }
 
