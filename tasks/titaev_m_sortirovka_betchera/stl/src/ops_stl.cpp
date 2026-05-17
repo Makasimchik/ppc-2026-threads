@@ -1,7 +1,6 @@
 #include "titaev_m_sortirovka_betchera/stl/include/ops_stl.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -58,16 +57,18 @@ bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
 void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &keys) {
   const size_t count_n = keys.size();
   std::vector<uint64_t> tmp(count_n);
-  for (int pass = 0; pass < 8; ++pass) {
-    std::array<size_t, 256> count = {0};
+  for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
+    std::vector<size_t> count_vec(256, 0);
     for (size_t i = 0; i < count_n; ++i) {
-      count[(keys[i] >> (static_cast<size_t>(pass) * 8)) & 255]++;
+      size_t bucket = (keys[i] >> (static_cast<size_t>(pass_idx) * 8)) & 255;
+      count_vec[bucket]++;
     }
     for (size_t i = 1; i < 256; ++i) {
-      count[i] += count[i - 1];
+      count_vec[i] += count_vec[i - 1];
     }
     for (size_t i = count_n; i > 0; --i) {
-      tmp[--count[(keys[i - 1] >> (static_cast<size_t>(pass) * 8)) & 255]] = keys[i - 1];
+      size_t bucket = (keys[i - 1] >> (static_cast<size_t>(pass_idx) * 8)) & 255;
+      tmp[--count_vec[bucket]] = keys[i - 1];
     }
     keys.swap(tmp);
   }
@@ -153,7 +154,7 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   return true;
 }
 
-bool TitaevSortirovkaBetcheraSTL::PostProcessingImpl() {
+bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   return true;
 }
 
