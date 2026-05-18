@@ -12,6 +12,8 @@
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
 #include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
 #include "titaev_m_sortirovka_betchera/seq/include/ops_seq.hpp"
+#include "titaev_m_sortirovka_betchera/stl/include/ops_stl.hpp"
+#include "titaev_m_sortirovka_betchera/tbb/include/ops_tbb.hpp"
 #include "util/include/func_test_util.hpp"
 
 namespace titaev_m_sortirovka_betchera {
@@ -71,6 +73,14 @@ std::shared_ptr<ppc::task::Task<InType, OutType>> CreateOmpTask(const InType &in
   return std::make_shared<TitaevSortirovkaBetcheraOMP>(in);
 }
 
+std::shared_ptr<ppc::task::Task<InType, OutType>> CreateTbbTask(const InType &in) {
+  return std::make_shared<TitaevSortirovkaBetcheraTBB>(in);
+}
+
+std::shared_ptr<ppc::task::Task<InType, OutType>> CreateStlTask(const InType &in) {
+  return std::make_shared<TitaevSortirovkaBetcheraSTL>(in);
+}
+
 using ActualParamType = TitaevBatcherRadixFuncTests::ParamType;
 
 const std::vector<ActualParamType> kSeqParams = {{CreateSeqTask, "seq_size_128", TestType{128, "size_128"}},
@@ -81,10 +91,24 @@ const std::vector<ActualParamType> kOmpParams = {{CreateOmpTask, "omp_size_128",
                                                  {CreateOmpTask, "omp_size_512", TestType{512, "size_512"}},
                                                  {CreateOmpTask, "omp_size_1024", TestType{1024, "size_1024"}}};
 
+const std::vector<ActualParamType> kTbbParams = {{CreateTbbTask, "tbb_size_128", TestType{128, "size_128"}},
+                                                 {CreateTbbTask, "tbb_size_512", TestType{512, "size_512"}},
+                                                 {CreateTbbTask, "tbb_size_1024", TestType{1024, "size_1024"}}};
+
+const std::vector<ActualParamType> kStlParams = {{CreateStlTask, "stl_size_128", TestType{128, "size_128"}},
+                                                 {CreateStlTask, "stl_size_512", TestType{512, "size_512"}},
+                                                 {CreateStlTask, "stl_size_1024", TestType{1024, "size_1024"}}};
+
 INSTANTIATE_TEST_SUITE_P(SequentialTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kSeqParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
 INSTANTIATE_TEST_SUITE_P(OpenMPTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kOmpParams),
+                         TitaevBatcherRadixFuncTests::PrintTestParam);
+
+INSTANTIATE_TEST_SUITE_P(TBBTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kTbbParams),
+                         TitaevBatcherRadixFuncTests::PrintTestParam);
+
+INSTANTIATE_TEST_SUITE_P(STLTests, TitaevBatcherRadixFuncTests, ::testing::ValuesIn(kStlParams),
                          TitaevBatcherRadixFuncTests::PrintTestParam);
 
 }  // namespace
