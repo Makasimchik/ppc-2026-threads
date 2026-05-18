@@ -33,9 +33,31 @@ double UnpackDouble(uint64_t bits) {
   } else {
     x_val = ~x_val;
   }
-  double res_val = 0.0;
-  std::memcpy(&res_val, &x_val, sizeof(double));
-  return res_val;
+  double value = 0.0;
+  std::memcpy(&value, &x_val, sizeof(double));
+  return value;
+}
+
+void RadixSortSequential(std::vector<uint64_t> &keys) {
+  const size_t count_n = keys.size();
+  if (count_n <= 1) {
+    return;
+  }
+  std::vector<uint64_t> tmp(count_n);
+  for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
+    size_t count_vec[256] = {0};
+    size_t shift = static_cast<size_t>(pass_idx) * 8;
+    for (size_t i = 0; i < count_n; ++i) {
+      count_vec[(keys[i] >> shift) & 255]++;
+    }
+    for (size_t i = 1; i < 256; ++i) {
+      count_vec[i] += count_vec[i - 1];
+    }
+    for (size_t i = count_n; i > 0; --i) {
+      tmp[--count_vec[(keys[i - 1] >> shift) & 255]] = keys[i - 1];
+    }
+    keys.swap(tmp);
+  }
 }
 }  // namespace
 
@@ -54,26 +76,6 @@ bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
   return true;
 }
 
-void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &keys) {
-  const size_t count_n = keys.size();
-  std::vector<uint64_t> tmp(count_n);
-  for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
-    std::vector<size_t> count_vec(256, 0);
-    for (size_t i = 0; i < count_n; ++i) {
-      size_t bucket = (keys[i] >> (static_cast<size_t>(pass_idx) * 8)) & 255;
-      count_vec[bucket]++;
-    }
-    for (size_t i = 1; i < 256; ++i) {
-      count_vec[i] += count_vec[i - 1];
-    }
-    for (size_t i = count_n; i > 0; --i) {
-      size_t bucket = (keys[i - 1] >> (static_cast<size_t>(pass_idx) * 8)) & 255;
-      tmp[--count_vec[bucket]] = keys[i - 1];
-    }
-    keys.swap(tmp);
-  }
-}
-
 void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr, size_t i, size_t j, bool ascending) {
   if (ascending ? (arr[i] > arr[j]) : (arr[i] < arr[j])) {
     std::swap(arr[i], arr[j]);
@@ -81,32 +83,32 @@ void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr, size_t i, size_t 
 }
 
 void TitaevSortirovkaBetcheraSTL::BatcherStepThreads(OutType &arr, size_t count_n, size_t step, size_t stage) {
-  const size_t num_threads = std::thread::hardware_concurrency();
-  std::vector<std::thread> threads;
-  size_t chunk_size = (count_n + num_threads - 1) / num_threads;
-
-  for (size_t t_idx = 0; t_idx < num_threads; ++t_idx) {
-    size_t start = t_idx * chunk_size;
-    size_t end = std::min(start + chunk_size, count_n);
-    if (start >= end) {
-      break;
-    }
-
-    threads.emplace_back([&arr, start, end, stage, step, count_n]() {
-      for (size_t i = start; i < end; ++i) {
-        size_t j = i ^ stage;
-        if (j > i && j < count_n) {
-          bool ascending = (i & step) == 0;
-          CompareAndSwap(arr, i, j, ascending);
-        }
+  if (count_n < 1000) {  // Для маленьких данных не плодим потоки
+    for (size_t i = 0; i < count_n; ++i) {
+      size_t j = i ^ stage;
+      if (j > i && j < count_n) {
+        CompareAndSwap(arr, i, j, (i & step) == 0);
       }
-    });
+    }
+    return;
   }
-  for (auto &th : threads) {
-    if (th.joinable()) {
-      th.join();
+
+  // Параллелим только на крупные куски
+  std::thread t([&]() {
+    for (size_t i = 0; i < count_n / 2; ++i) {
+      size_t j = i ^ stage;
+      if (j > i && j < count_n) {
+        CompareAndSwap(arr, i, j, (i & step) == 0);
+      }
+    }
+  });
+  for (size_t i = count_n / 2; i < count_n; ++i) {
+    size_t j = i ^ stage;
+    if (j > i && j < count_n) {
+      CompareAndSwap(arr, i, j, (i & step) == 0);
     }
   }
+  t.join();
 }
 
 void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr, size_t count_n) {
