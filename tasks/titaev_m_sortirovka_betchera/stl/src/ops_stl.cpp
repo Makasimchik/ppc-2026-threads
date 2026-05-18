@@ -36,6 +36,7 @@ TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
 bool TitaevSortirovkaBetcheraSTL::ValidationImpl() {
   return !GetInput().empty();
 }
+
 bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
   GetOutput() = GetInput();
   return true;
@@ -63,38 +64,41 @@ void TitaevSortirovkaBetcheraSTL::SerialRadixSort(std::vector<uint64_t> &data) {
   }
 }
 
+void TitaevSortirovkaBetcheraSTL::BatcherMergeStep(OutType &output, size_t size_n, size_t step, size_t stage) {
+  auto future_task = std::async(std::launch::async, [&output, step, stage, size_n]() {
+    for (size_t i = 0; i < size_n / 2; ++i) {
+      size_t j = i ^ stage;
+      if (j > i && j < size_n) {
+        bool asc = (i & step) == 0;
+        if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
+          std::swap(output[i], output[j]);
+        }
+      }
+    }
+  });
+  for (size_t i = size_n / 2; i < size_n; ++i) {
+    size_t j = i ^ stage;
+    if (j > i && j < size_n) {
+      bool asc = (i & step) == 0;
+      if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
+        std::swap(output[i], output[j]);
+      }
+    }
+  }
+  future_task.get();
+}
+
 void TitaevSortirovkaBetcheraSTL::ParallelBatcherMerge(OutType &output, size_t size_n) {
   for (size_t step = 1; step < size_n; step <<= 1) {
     for (size_t stage = step; stage > 0; stage >>= 1) {
-      auto future_task = std::async(std::launch::async, [&output, step, stage, size_n]() {
-        for (size_t i = 0; i < size_n / 2; ++i) {
-          size_t j = i ^ stage;
-          if (j > i && j < size_n) {
-            bool asc = (i & step) == 0;
-            if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
-              std::swap(output[i], output[j]);
-            }
-          }
-        }
-      });
-      for (size_t i = size_n / 2; i < size_n; ++i) {
-        size_t j = i ^ stage;
-        if (j > i && j < size_n) {
-          bool asc = (i & step) == 0;
-          if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
-            std::swap(output[i], output[j]);
-          }
-        }
-      }
-      future_task.get();
+      BatcherMergeStep(output, size_n, step, stage);
     }
   }
 }
 
 bool TitaevSortirovkaBetcheraSTL::RunImpl() {
-  auto &input = GetInput();
-  size_t original_count = input.size();
-
+  auto &input_vec = GetInput();
+  size_t original_count = input_vec.size();
   size_t size_n = 1;
   while (size_n < original_count) {
     size_n <<= 1;
@@ -102,7 +106,7 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
 
   std::vector<uint64_t> keys(size_n, DoubleToBits(std::numeric_limits<double>::max()));
   for (size_t i = 0; i < original_count; ++i) {
-    keys[i] = DoubleToBits(input[i]);
+    keys[i] = DoubleToBits(input_vec[i]);
   }
 
   size_t mid = size_n / 2;
@@ -113,15 +117,15 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   SerialRadixSort(right_part);
   left_future.get();
 
-  auto &result = GetOutput();
-  result.resize(size_n);
+  auto &res_out = GetOutput();
+  res_out.resize(size_n);
   for (size_t i = 0; i < mid; ++i) {
-    result[i] = BitsToDouble(left_part[i]);
-    result[i + mid] = BitsToDouble(right_part[i]);
+    res_out[i] = BitsToDouble(left_part[i]);
+    res_out[i + mid] = BitsToDouble(right_part[i]);
   }
 
-  ParallelBatcherMerge(result, size_n);
-  result.resize(original_count);
+  ParallelBatcherMerge(res_out, size_n);
+  res_out.resize(original_count);
   return true;
 }
 
