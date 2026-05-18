@@ -32,9 +32,9 @@ double TitaevSortirovkaBetcheraSTL::UnpackDouble(uint64_t bits) {
   } else {
     x_val = ~x_val;
   }
-  double value = 0.0;
-  std::memcpy(&value, &x_val, sizeof(double));
-  return value;
+  double val = 0.0;
+  std::memcpy(&val, &x_val, sizeof(double));
+  return val;
 }
 
 TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
@@ -59,7 +59,7 @@ void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &key
   }
   std::vector<uint64_t> temp_vec(count_n);
   for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
-    size_t count_buckets[256] = {0};
+    std::vector<size_t> count_buckets(256, 0);
     size_t shift_val = static_cast<size_t>(pass_idx) * 8;
     for (size_t i = 0; i < count_n; ++i) {
       count_buckets[(keys_vec[i] >> shift_val) & 255]++;
@@ -80,32 +80,25 @@ void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr_vec, size_t i_idx,
   }
 }
 
+void TitaevSortirovkaBetcheraSTL::BatcherTask(OutType &arr_vec, size_t start, size_t end, size_t step, size_t stage,
+                                              size_t count_n) {
+  for (size_t i = start; i < end; ++i) {
+    size_t j_idx = i ^ stage;
+    if (j_idx > i && j_idx < count_n) {
+      CompareAndSwap(arr_vec, i, j_idx, (i & step) == 0);
+    }
+  }
+}
+
 void TitaevSortirovkaBetcheraSTL::BatcherStepThreads(OutType &arr_vec, size_t count_n, size_t step_size,
                                                      size_t stage_dist) {
   if (count_n < 1000) {
-    for (size_t i = 0; i < count_n; ++i) {
-      size_t j_idx = i ^ stage_dist;
-      if (j_idx > i && j_idx < count_n) {
-        CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
-      }
-    }
+    BatcherTask(arr_vec, 0, count_n, step_size, stage_dist, count_n);
     return;
   }
 
-  std::thread worker_thread([&]() {
-    for (size_t i = 0; i < count_n / 2; ++i) {
-      size_t j_idx = i ^ stage_dist;
-      if (j_idx > i && j_idx < count_n) {
-        CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
-      }
-    }
-  });
-  for (size_t i = count_n / 2; i < count_n; ++i) {
-    size_t j_idx = i ^ stage_dist;
-    if (j_idx > i && j_idx < count_n) {
-      CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
-    }
-  }
+  std::thread worker_thread([&]() { BatcherTask(arr_vec, 0, count_n / 2, step_size, stage_dist, count_n); });
+  BatcherTask(arr_vec, count_n / 2, count_n, step_size, stage_dist, count_n);
   worker_thread.join();
 }
 
