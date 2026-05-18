@@ -22,10 +22,12 @@ class TitaevSortirovkaBetcheraSTL : public BaseTask {
   bool PostProcessingImpl() override;
 
  private:
-  static void RadixSortSequential(std::vector<uint64_t> &keys);
-  static void BatcherMergeParallel(OutType &arr, size_t count_n);
-  static void BatcherStepThreads(OutType &arr, size_t count_n, size_t step, size_t stage);
-  static void CompareAndSwap(OutType &arr, size_t i, size_t j, bool ascending);
+  static void RadixSortSequential(std::vector<uint64_t> &keys_vec);
+  static void BatcherMergeParallel(OutType &arr_vec, size_t count_n);
+  static void BatcherStepThreads(OutType &arr_vec, size_t count_n, size_t step_size, size_t stage_dist);
+  static void CompareAndSwap(OutType &arr_vec, size_t i_idx, size_t j_idx, bool is_ascending);
+  static uint64_t PackDouble(double value);
+  static double UnpackDouble(uint64_t bits);
 };
 
 }  // namespace titaev_m_sortirovka_betchera

@@ -12,8 +12,7 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-namespace {
-uint64_t PackDouble(double value) {
+uint64_t TitaevSortirovkaBetcheraSTL::PackDouble(double value) {
   uint64_t bits = 0;
   std::memcpy(&bits, &value, sizeof(double));
   constexpr uint64_t kSignMask = (1ULL << 63);
@@ -25,7 +24,7 @@ uint64_t PackDouble(double value) {
   return bits;
 }
 
-double UnpackDouble(uint64_t bits) {
+double TitaevSortirovkaBetcheraSTL::UnpackDouble(uint64_t bits) {
   constexpr uint64_t kSignMask = (1ULL << 63);
   uint64_t x_val = bits;
   if ((x_val & kSignMask) != 0ULL) {
@@ -37,29 +36,6 @@ double UnpackDouble(uint64_t bits) {
   std::memcpy(&value, &x_val, sizeof(double));
   return value;
 }
-
-void RadixSortSequential(std::vector<uint64_t> &keys) {
-  const size_t count_n = keys.size();
-  if (count_n <= 1) {
-    return;
-  }
-  std::vector<uint64_t> tmp(count_n);
-  for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
-    size_t count_vec[256] = {0};
-    size_t shift = static_cast<size_t>(pass_idx) * 8;
-    for (size_t i = 0; i < count_n; ++i) {
-      count_vec[(keys[i] >> shift) & 255]++;
-    }
-    for (size_t i = 1; i < 256; ++i) {
-      count_vec[i] += count_vec[i - 1];
-    }
-    for (size_t i = count_n; i > 0; --i) {
-      tmp[--count_vec[(keys[i - 1] >> shift) & 255]] = keys[i - 1];
-    }
-    keys.swap(tmp);
-  }
-}
-}  // namespace
 
 TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
@@ -76,45 +52,67 @@ bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
   return true;
 }
 
-void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr, size_t i, size_t j, bool ascending) {
-  if (ascending ? (arr[i] > arr[j]) : (arr[i] < arr[j])) {
-    std::swap(arr[i], arr[j]);
+void TitaevSortirovkaBetcheraSTL::RadixSortSequential(std::vector<uint64_t> &keys_vec) {
+  const size_t count_n = keys_vec.size();
+  if (count_n <= 1) {
+    return;
+  }
+  std::vector<uint64_t> temp_vec(count_n);
+  for (int pass_idx = 0; pass_idx < 8; ++pass_idx) {
+    size_t count_buckets[256] = {0};
+    size_t shift_val = static_cast<size_t>(pass_idx) * 8;
+    for (size_t i = 0; i < count_n; ++i) {
+      count_buckets[(keys_vec[i] >> shift_val) & 255]++;
+    }
+    for (size_t i = 1; i < 256; ++i) {
+      count_buckets[i] += count_buckets[i - 1];
+    }
+    for (size_t i = count_n; i > 0; --i) {
+      temp_vec[--count_buckets[(keys_vec[i - 1] >> shift_val) & 255]] = keys_vec[i - 1];
+    }
+    keys_vec.swap(temp_vec);
   }
 }
 
-void TitaevSortirovkaBetcheraSTL::BatcherStepThreads(OutType &arr, size_t count_n, size_t step, size_t stage) {
-  if (count_n < 1000) {  // Для маленьких данных не плодим потоки
+void TitaevSortirovkaBetcheraSTL::CompareAndSwap(OutType &arr_vec, size_t i_idx, size_t j_idx, bool is_ascending) {
+  if (is_ascending ? (arr_vec[i_idx] > arr_vec[j_idx]) : (arr_vec[i_idx] < arr_vec[j_idx])) {
+    std::swap(arr_vec[i_idx], arr_vec[j_idx]);
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::BatcherStepThreads(OutType &arr_vec, size_t count_n, size_t step_size,
+                                                     size_t stage_dist) {
+  if (count_n < 1000) {
     for (size_t i = 0; i < count_n; ++i) {
-      size_t j = i ^ stage;
-      if (j > i && j < count_n) {
-        CompareAndSwap(arr, i, j, (i & step) == 0);
+      size_t j_idx = i ^ stage_dist;
+      if (j_idx > i && j_idx < count_n) {
+        CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
       }
     }
     return;
   }
 
-  // Параллелим только на крупные куски
-  std::thread t([&]() {
+  std::thread worker_thread([&]() {
     for (size_t i = 0; i < count_n / 2; ++i) {
-      size_t j = i ^ stage;
-      if (j > i && j < count_n) {
-        CompareAndSwap(arr, i, j, (i & step) == 0);
+      size_t j_idx = i ^ stage_dist;
+      if (j_idx > i && j_idx < count_n) {
+        CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
       }
     }
   });
   for (size_t i = count_n / 2; i < count_n; ++i) {
-    size_t j = i ^ stage;
-    if (j > i && j < count_n) {
-      CompareAndSwap(arr, i, j, (i & step) == 0);
+    size_t j_idx = i ^ stage_dist;
+    if (j_idx > i && j_idx < count_n) {
+      CompareAndSwap(arr_vec, i, j_idx, (i & step_size) == 0);
     }
   }
-  t.join();
+  worker_thread.join();
 }
 
-void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr, size_t count_n) {
+void TitaevSortirovkaBetcheraSTL::BatcherMergeParallel(OutType &arr_vec, size_t count_n) {
   for (size_t step = 1; step < count_n; step <<= 1) {
     for (size_t stage = step; stage > 0; stage >>= 1) {
-      BatcherStepThreads(arr, count_n, step, stage);
+      BatcherStepThreads(arr_vec, count_n, step, stage);
     }
   }
 }
@@ -136,23 +134,23 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
     keys[i] = PackDouble(input_data[i]);
   }
 
-  size_t half = count_n / 2;
-  std::vector<uint64_t> left_keys(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(half));
-  std::vector<uint64_t> right_keys(keys.begin() + static_cast<std::ptrdiff_t>(half), keys.end());
+  size_t half_n = count_n / 2;
+  std::vector<uint64_t> left_keys(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(half_n));
+  std::vector<uint64_t> right_keys(keys.begin() + static_cast<std::ptrdiff_t>(half_n), keys.end());
 
   std::thread radix_thread([&]() { RadixSortSequential(left_keys); });
   RadixSortSequential(right_keys);
   radix_thread.join();
 
-  auto &output = GetOutput();
-  output.resize(count_n);
-  for (size_t i = 0; i < half; ++i) {
-    output[i] = UnpackDouble(left_keys[i]);
-    output[i + half] = UnpackDouble(right_keys[i]);
+  auto &output_data = GetOutput();
+  output_data.resize(count_n);
+  for (size_t i = 0; i < half_n; ++i) {
+    output_data[i] = UnpackDouble(left_keys[i]);
+    output_data[i + half_n] = UnpackDouble(right_keys[i]);
   }
 
-  BatcherMergeParallel(output, count_n);
-  output.resize(original_size);
+  BatcherMergeParallel(output_data, count_n);
+  output_data.resize(original_size);
   return true;
 }
 
