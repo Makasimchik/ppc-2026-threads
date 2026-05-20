@@ -1,11 +1,9 @@
 #include "titaev_m_sortirovka_betchera/stl/include/ops_stl.hpp"
 
 #include <algorithm>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <future>
 #include <limits>
 #include <vector>
 
@@ -14,12 +12,8 @@
 namespace titaev_m_sortirovka_betchera {
 
 uint64_t TitaevSortirovkaBetcheraSTL::DoubleToBits(double val) {
-#if defined(__cpp_lib_bit_cast)
-  uint64_t bits = std::bit_cast<uint64_t>(val);
-#else
   uint64_t bits = 0;
   std::memcpy(&bits, &val, sizeof(double));
-#endif
   const uint64_t mask = 1ULL << 63;
   return ((bits & mask) != 0ULL) ? ~bits : (bits ^ mask);
 }
@@ -27,13 +21,9 @@ uint64_t TitaevSortirovkaBetcheraSTL::DoubleToBits(double val) {
 double TitaevSortirovkaBetcheraSTL::BitsToDouble(uint64_t bits) {
   const uint64_t mask = 1ULL << 63;
   uint64_t orig_bits = ((bits & mask) != 0ULL) ? (bits ^ mask) : ~bits;
-#if defined(__cpp_lib_bit_cast)
-  return std::bit_cast<double>(orig_bits);
-#else
   double res = 0.0;
   std::memcpy(&res, &orig_bits, sizeof(double));
   return res;
-#endif
 }
 
 TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
@@ -94,8 +84,13 @@ void TitaevSortirovkaBetcheraSTL::ParallelBatcherMerge(OutType &output, size_t s
 }
 
 bool TitaevSortirovkaBetcheraSTL::RunImpl() {
-  auto &input_vec = GetInput();
+  const auto &input_vec = GetInput();
   size_t original_count = input_vec.size();
+  if (original_count == 0) {
+    GetOutput().clear();
+    return true;
+  }
+
   size_t size_n = 1;
   while (size_n < original_count) {
     size_n <<= 1;
@@ -111,9 +106,8 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   std::vector<uint64_t> left_part(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(mid));
   std::vector<uint64_t> right_part(keys.begin() + static_cast<std::ptrdiff_t>(mid), keys.end());
 
-  auto left_future = std::async(std::launch::async, [&left_part]() { SerialRadixSort(left_part); });
+  SerialRadixSort(left_part);
   SerialRadixSort(right_part);
-  left_future.get();
 
   auto &res_out = GetOutput();
   res_out.resize(size_n);
@@ -123,6 +117,7 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   }
 
   ParallelBatcherMerge(res_out, size_n);
+
   res_out.resize(original_count);
   return true;
 }
