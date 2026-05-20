@@ -15,20 +15,23 @@ namespace titaev_m_sortirovka_betchera {
 
 uint64_t TitaevSortirovkaBetcheraSTL::DoubleToBits(double val) {
 #if defined(__cpp_lib_bit_cast)
-  return std::bit_cast<uint64_t>(val);
+  uint64_t bits = std::bit_cast<uint64_t>(val);
 #else
   uint64_t bits = 0;
   std::memcpy(&bits, &val, sizeof(double));
-  return bits;
 #endif
+  const uint64_t mask = 1ULL << 63;
+  return ((bits & mask) != 0ULL) ? ~bits : (bits ^ mask);
 }
 
 double TitaevSortirovkaBetcheraSTL::BitsToDouble(uint64_t bits) {
+  const uint64_t mask = 1ULL << 63;
+  uint64_t orig_bits = ((bits & mask) != 0ULL) ? (bits ^ mask) : ~bits;
 #if defined(__cpp_lib_bit_cast)
-  return std::bit_cast<double>(bits);
+  return std::bit_cast<double>(orig_bits);
 #else
   double res = 0.0;
-  std::memcpy(&res, &bits, sizeof(double));
+  std::memcpy(&res, &orig_bits, sizeof(double));
   return res;
 #endif
 }
@@ -98,7 +101,8 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
     size_n <<= 1;
   }
 
-  std::vector<uint64_t> keys(size_n, DoubleToBits(std::numeric_limits<double>::max()));
+  uint64_t inf_bits = DoubleToBits(std::numeric_limits<double>::max());
+  std::vector<uint64_t> keys(size_n, inf_bits);
   for (size_t i = 0; i < original_count; ++i) {
     keys[i] = DoubleToBits(input_vec[i]);
   }
@@ -119,7 +123,6 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   }
 
   ParallelBatcherMerge(res_out, size_n);
-
   res_out.resize(original_count);
   return true;
 }
