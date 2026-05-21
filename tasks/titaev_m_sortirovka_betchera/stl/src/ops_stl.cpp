@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -117,6 +118,21 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   }
 
   ParallelBatcherMerge(res_out, size_n);
+
+  for (size_t i = 1; i < res_out.size(); ++i) {
+    if (res_out[i] < res_out[i - 1]) {
+      size_t start = (i >= 5) ? (i - 5) : 0;
+      size_t end = std::min(res_out.size(), i + 5);
+      std::fprintf(stderr, "Sort validation failed at index %zu (res[%zu]=%.17g < res[%zu]=%.17g)\n", i, i, i - 1,
+                   res_out[i], res_out[i - 1]);
+      std::fprintf(stderr, "Context (indices %zu..%zu):\n", start, end - 1);
+      for (size_t k = start; k < end; ++k) {
+        std::fprintf(stderr, "  [%zu] = %.17g\n", k, res_out[k]);
+      }
+      std::fflush(stderr);
+      return false;
+    }
+  }
 
   res_out.resize(original_count);
   return true;
