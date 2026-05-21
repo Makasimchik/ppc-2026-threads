@@ -65,30 +65,32 @@ void TitaevSortirovkaBetcheraSTL::SerialRadixSort(std::vector<uint64_t> &data) {
   }
 }
 
+static void ProcessMergeChunk(OutType &output, size_t begin, size_t end, size_t size_n, size_t step, size_t stage) {
+  for (size_t idx = begin; idx < end; ++idx) {
+    size_t partner = idx ^ stage;
+    if (partner > idx && partner < size_n) {
+      bool asc = (idx & step) == 0;
+      if (asc ? (output[idx] > output[partner]) : (output[idx] < output[partner])) {
+        std::swap(output[idx], output[partner]);
+      }
+    }
+  }
+}
+
 void TitaevSortirovkaBetcheraSTL::BatcherMergeStep(OutType &output, size_t size_n, size_t step, size_t stage) {
-  const size_t num_threads = std::max(1u, std::thread::hardware_concurrency());
+  const size_t num_threads = std::max(1U, std::thread::hardware_concurrency());
   std::vector<std::thread> threads;
   threads.reserve(num_threads);
 
   size_t chunk = (size_n + num_threads - 1) / num_threads;
 
-  for (size_t t = 0; t < num_threads; ++t) {
-    size_t begin = t * chunk;
-    size_t end = std::min(begin + chunk, size_n);
+  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+    size_t begin = thread_idx * chunk;
     if (begin >= size_n) {
       break;
     }
-    threads.emplace_back([&output, begin, end, size_n, step, stage]() {
-      for (size_t i = begin; i < end; ++i) {
-        size_t j = i ^ stage;
-        if (j > i && j < size_n) {
-          bool asc = (i & step) == 0;
-          if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
-            std::swap(output[i], output[j]);
-          }
-        }
-      }
-    });
+    size_t end = std::min(begin + chunk, size_n);
+    threads.emplace_back(ProcessMergeChunk, std::ref(output), begin, end, size_n, step, stage);
   }
 
   for (auto &th : threads) {
