@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <future>
 #include <limits>
+#include <thread>
 #include <vector>
 
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
@@ -64,14 +66,33 @@ void TitaevSortirovkaBetcheraSTL::SerialRadixSort(std::vector<uint64_t> &data) {
 }
 
 void TitaevSortirovkaBetcheraSTL::BatcherMergeStep(OutType &output, size_t size_n, size_t step, size_t stage) {
-  for (size_t i = 0; i < size_n; ++i) {
-    size_t j = i ^ stage;
-    if (j > i && j < size_n) {
-      bool asc = (i & step) == 0;
-      if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
-        std::swap(output[i], output[j]);
-      }
+  const size_t num_threads = std::max(1u, std::thread::hardware_concurrency());
+  std::vector<std::thread> threads;
+  threads.reserve(num_threads);
+
+  size_t chunk = (size_n + num_threads - 1) / num_threads;
+
+  for (size_t t = 0; t < num_threads; ++t) {
+    size_t begin = t * chunk;
+    size_t end = std::min(begin + chunk, size_n);
+    if (begin >= size_n) {
+      break;
     }
+    threads.emplace_back([&output, begin, end, size_n, step, stage]() {
+      for (size_t i = begin; i < end; ++i) {
+        size_t j = i ^ stage;
+        if (j > i && j < size_n) {
+          bool asc = (i & step) == 0;
+          if (asc ? (output[i] > output[j]) : (output[i] < output[j])) {
+            std::swap(output[i], output[j]);
+          }
+        }
+      }
+    });
+  }
+
+  for (auto &th : threads) {
+    th.join();
   }
 }
 
@@ -106,8 +127,9 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
   std::vector<uint64_t> left_part(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(mid));
   std::vector<uint64_t> right_part(keys.begin() + static_cast<std::ptrdiff_t>(mid), keys.end());
 
-  SerialRadixSort(left_part);
+  auto left_future = std::async(std::launch::async, [&]() { SerialRadixSort(left_part); });
   SerialRadixSort(right_part);
+  left_future.get();
 
   auto &res_out = GetOutput();
   res_out.resize(size_n);
