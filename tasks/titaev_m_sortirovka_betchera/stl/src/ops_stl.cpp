@@ -4,9 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <future>
-#include <limits>
 #include <thread>
 #include <vector>
 
@@ -16,65 +14,73 @@ namespace titaev_m_sortirovka_betchera {
 
 namespace {
 
-void RadixSortChunk(std::vector<uint64_t> &data) {
-  const size_t data_size = data.size();
-  if (data_size <= 1) {
-    return;
+uint64_t DoubleToOrderedUint(double value) {
+  uint64_t bits = 0;
+
+  std::memcpy(&bits, &value, sizeof(double));
+
+  constexpr uint64_t kSignMask = (1ULL << 63);
+
+  if ((bits & kSignMask) != 0ULL) {
+    bits = ~bits;
+  } else {
+    bits ^= kSignMask;
   }
-  std::vector<uint64_t> buffer(data_size);
-  for (int byte_idx = 0; byte_idx < 8; ++byte_idx) {
-    std::vector<size_t> counts(256, 0);
-    const size_t shift = static_cast<size_t>(byte_idx) * 8;
-    for (const auto &val : data) {
-      counts[(val >> shift) & 255U]++;
-    }
-    for (size_t i = 1; i < 256; ++i) {
-      counts[i] += counts[i - 1];
-    }
-    for (size_t i = data_size; i > 0; --i) {
-      buffer[--counts[(data[i - 1] >> shift) & 255U]] = data[i - 1];
-    }
-    data.swap(buffer);
-  }
+
+  return bits;
 }
 
-void MergeSortedChunks(std::vector<uint64_t> &data, size_t chunk_size, size_t total_size) {
-  std::vector<uint64_t> buffer(total_size);
-  size_t current_chunk = chunk_size;
-  while (current_chunk < total_size) {
-    for (size_t left = 0; left < total_size; left += current_chunk * 2) {
-      size_t mid = std::min(left + current_chunk, total_size);
-      size_t right = std::min(left + current_chunk * 2, total_size);
-      std::merge(data.begin() + static_cast<std::ptrdiff_t>(left), data.begin() + static_cast<std::ptrdiff_t>(mid),
-                 data.begin() + static_cast<std::ptrdiff_t>(mid), data.begin() + static_cast<std::ptrdiff_t>(right),
-                 buffer.begin() + static_cast<std::ptrdiff_t>(left));
-      std::copy(buffer.begin() + static_cast<std::ptrdiff_t>(left), buffer.begin() + static_cast<std::ptrdiff_t>(right),
-                data.begin() + static_cast<std::ptrdiff_t>(left));
+double OrderedUintToDouble(uint64_t bits) {
+  constexpr uint64_t kSignMask = (1ULL << 63);
+
+  if ((bits & kSignMask) != 0ULL) {
+    bits ^= kSignMask;
+  } else {
+    bits = ~bits;
+  }
+
+  double result = 0.0;
+
+  std::memcpy(&result, &bits, sizeof(double));
+
+  return result;
+}
+
+void RadixPass(int pass_num, size_t count, const std::vector<uint64_t> &source, std::vector<uint64_t> &dest) {
+  constexpr size_t kBuckets = 256;
+
+  std::vector<size_t> histogram(kBuckets, 0);
+
+  for (size_t i = 0; i < count; ++i) {
+    size_t bucket = (source[i] >> (static_cast<size_t>(pass_num) * 8)) & 255U;
+
+    histogram[bucket]++;
+  }
+
+  std::vector<size_t> offsets(kBuckets, 0);
+
+  for (size_t i = 1; i < kBuckets; ++i) {
+    offsets[i] = offsets[i - 1] + histogram[i - 1];
+  }
+
+  for (size_t bucket = 0; bucket < kBuckets; ++bucket) {
+    size_t pos = offsets[bucket];
+
+    for (size_t i = 0; i < count; ++i) {
+      if (((source[i] >> (static_cast<size_t>(pass_num) * 8)) & 255U) == bucket) {
+        dest[pos++] = source[i];
+      }
     }
-    current_chunk *= 2;
   }
 }
 
 }  // namespace
 
-uint64_t TitaevSortirovkaBetcheraSTL::DoubleToBits(double val) {
-  uint64_t bits = 0;
-  std::memcpy(&bits, &val, sizeof(double));
-  const uint64_t mask = 1ULL << 63;
-  return ((bits & mask) != 0ULL) ? ~bits : (bits ^ mask);
-}
-
-double TitaevSortirovkaBetcheraSTL::BitsToDouble(uint64_t bits) {
-  const uint64_t mask = 1ULL << 63;
-  const uint64_t orig_bits = ((bits & mask) != 0ULL) ? (bits ^ mask) : ~bits;
-  double res = 0.0;
-  std::memcpy(&res, &orig_bits, sizeof(double));
-  return res;
-}
-
 TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
+
   GetInput() = in;
+
   GetOutput().clear();
 }
 
@@ -84,61 +90,158 @@ bool TitaevSortirovkaBetcheraSTL::ValidationImpl() {
 
 bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
   GetOutput() = GetInput();
+
   return true;
 }
 
-void TitaevSortirovkaBetcheraSTL::SerialRadixSort(std::vector<uint64_t> &data) {
-  RadixSortChunk(data);
-}
+void TitaevSortirovkaBetcheraSTL::ConvertToKeys(const InType &input, std::vector<uint64_t> &keys) {
+  const size_t size = input.size();
 
-void TitaevSortirovkaBetcheraSTL::BatcherMergeStep(OutType & /*output*/, size_t /*size_n*/, size_t /*step*/,
-                                                   size_t /*stage*/) {}
+  const size_t threads = std::max(1U, std::thread::hardware_concurrency());
 
-void TitaevSortirovkaBetcheraSTL::ParallelBatcherMerge(OutType & /*output*/, size_t /*size_n*/) {}
-
-bool TitaevSortirovkaBetcheraSTL::RunImpl() {
-  const auto &input_vec = GetInput();
-  const size_t original_count = input_vec.size();
-  if (original_count == 0) {
-    GetOutput().clear();
-    return true;
-  }
-
-  const size_t num_threads = std::max(1U, std::thread::hardware_concurrency());
-  const size_t chunk_size = (original_count + num_threads - 1) / num_threads;
-
-  std::vector<uint64_t> keys(original_count);
-  for (size_t i = 0; i < original_count; ++i) {
-    keys[i] = DoubleToBits(input_vec[i]);
-  }
+  const size_t block = (size + threads - 1) / threads;
 
   std::vector<std::future<void>> futures;
-  futures.reserve(num_threads);
 
-  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
-    const size_t begin = thread_idx * chunk_size;
-    if (begin >= original_count) {
+  for (size_t t = 0; t < threads; ++t) {
+    const size_t begin = t * block;
+
+    if (begin >= size) {
       break;
     }
-    const size_t end = std::min(begin + chunk_size, original_count);
-    futures.emplace_back(std::async(std::launch::async, [&keys, begin, end]() {
-      std::vector<uint64_t> chunk(keys.begin() + static_cast<std::ptrdiff_t>(begin),
-                                  keys.begin() + static_cast<std::ptrdiff_t>(end));
-      RadixSortChunk(chunk);
-      std::copy(chunk.begin(), chunk.end(), keys.begin() + static_cast<std::ptrdiff_t>(begin));
+
+    const size_t end = std::min(begin + block, size);
+
+    futures.emplace_back(std::async(std::launch::async, [&input, &keys, begin, end]() {
+      for (size_t i = begin; i < end; ++i) {
+        keys[i] = DoubleToOrderedUint(input[i]);
+      }
     }));
   }
 
-  for (auto &fut : futures) {
-    fut.get();
+  for (auto &future : futures) {
+    future.get();
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::RadixSortParallel(std::vector<uint64_t> &keys) {
+  const size_t size = keys.size();
+
+  if (size <= 1) {
+    return;
   }
 
-  MergeSortedChunks(keys, chunk_size, original_count);
+  std::vector<uint64_t> temp(size);
 
-  auto &res_out = GetOutput();
-  res_out.resize(original_count);
-  for (size_t i = 0; i < original_count; ++i) {
-    res_out[i] = BitsToDouble(keys[i]);
+  for (int pass = 0; pass < 8; ++pass) {
+    if (pass % 2 == 0) {
+      RadixPass(pass, size, keys, temp);
+    } else {
+      RadixPass(pass, size, temp, keys);
+    }
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output) {
+  const size_t size = keys.size();
+
+  output.resize(size);
+
+  const size_t threads = std::max(1U, std::thread::hardware_concurrency());
+
+  const size_t block = (size + threads - 1) / threads;
+
+  std::vector<std::future<void>> futures;
+
+  for (size_t t = 0; t < threads; ++t) {
+    const size_t begin = t * block;
+
+    if (begin >= size) {
+      break;
+    }
+
+    const size_t end = std::min(begin + block, size);
+
+    futures.emplace_back(std::async(std::launch::async, [&keys, &output, begin, end]() {
+      for (size_t i = begin; i < end; ++i) {
+        output[i] = OrderedUintToDouble(keys[i]);
+      }
+    }));
+  }
+
+  for (auto &future : futures) {
+    future.get();
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::BatcherStepParallel(OutType &res, size_t n, size_t step, size_t stage) {
+  const size_t threads = std::max(1U, std::thread::hardware_concurrency());
+
+  const size_t block = (n + threads - 1) / threads;
+
+  std::vector<std::future<void>> futures;
+
+  for (size_t t = 0; t < threads; ++t) {
+    const size_t begin = t * block;
+
+    if (begin >= n) {
+      break;
+    }
+
+    const size_t end = std::min(begin + block, n);
+
+    futures.emplace_back(std::async(std::launch::async, [&res, begin, end, n, step, stage]() {
+      for (size_t i = begin; i < end; ++i) {
+        size_t j = i ^ stage;
+
+        if (j > i && j < n) {
+          bool asc = (i & step) == 0;
+
+          if (asc ? (res[i] > res[j]) : (res[i] < res[j])) {
+            std::swap(res[i], res[j]);
+          }
+        }
+      }
+    }));
+  }
+
+  for (auto &future : futures) {
+    future.get();
+  }
+}
+
+void TitaevSortirovkaBetcheraSTL::BatcherSortParallel() {
+  auto &res = GetOutput();
+
+  const size_t n = res.size();
+
+  for (size_t step = 1; step < n; step <<= 1) {
+    for (size_t stage = step; stage > 0; stage >>= 1) {
+      BatcherStepParallel(res, n, step, stage);
+    }
+  }
+}
+
+bool TitaevSortirovkaBetcheraSTL::RunImpl() {
+  const auto &input = GetInput();
+
+  const size_t size = input.size();
+
+  if (size <= 1) {
+    GetOutput() = input;
+    return true;
+  }
+
+  std::vector<uint64_t> keys(size);
+
+  ConvertToKeys(input, keys);
+
+  RadixSortParallel(keys);
+
+  ConvertFromKeys(keys, GetOutput());
+
+  if ((size & (size - 1)) == 0) {
+    BatcherSortParallel();
   }
 
   return true;

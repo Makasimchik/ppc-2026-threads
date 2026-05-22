@@ -14,6 +14,7 @@ class TitaevSortirovkaBetcheraSTL : public BaseTask {
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kSTL;
   }
+
   explicit TitaevSortirovkaBetcheraSTL(const InType &in);
 
   bool ValidationImpl() override;
@@ -22,11 +23,15 @@ class TitaevSortirovkaBetcheraSTL : public BaseTask {
   bool PostProcessingImpl() override;
 
  private:
-  static uint64_t DoubleToBits(double val);
-  static double BitsToDouble(uint64_t bits);
-  static void SerialRadixSort(std::vector<uint64_t> &data);
-  static void BatcherMergeStep(OutType &output, size_t size_n, size_t step, size_t stage);
-  static void ParallelBatcherMerge(OutType &output, size_t size_n);
+  static void ConvertToKeys(const InType &input, std::vector<uint64_t> &keys);
+
+  static void RadixSortParallel(std::vector<uint64_t> &keys);
+
+  static void ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output);
+
+  void BatcherSortParallel();
+
+  static void BatcherStepParallel(OutType &res, size_t n, size_t step, size_t stage);
 };
 
 }  // namespace titaev_m_sortirovka_betchera
