@@ -89,7 +89,16 @@ bool TitaevSortirovkaBetcheraSTL::ValidationImpl() {
 }
 
 bool TitaevSortirovkaBetcheraSTL::PreProcessingImpl() {
-  GetOutput() = GetInput();
+  const auto &input = GetInput();
+  auto &output = GetOutput();
+
+  const size_t size = input.size();
+
+  output.resize(size);
+
+  for (size_t i = 0; i < size; ++i) {
+    output[i] = input[i];
+  }
 
   return true;
 }
@@ -229,8 +238,12 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
 
   auto &output = GetOutput();
 
+  output.resize(size);
+
   if (size <= 1) {
-    output.assign(input.begin(), input.end());
+    for (size_t i = 0; i < size; ++i) {
+      output[i] = input[i];
+    }
     return true;
   }
 
