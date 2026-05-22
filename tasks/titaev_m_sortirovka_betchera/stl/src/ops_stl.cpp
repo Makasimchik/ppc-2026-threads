@@ -74,6 +74,27 @@ void RadixPass(int pass_num, size_t count, const std::vector<uint64_t> &source, 
   }
 }
 
+void BatcherCompareSwap(OutType &res, size_t i, size_t n, size_t step, size_t stage) {
+  size_t j = i ^ stage;
+
+  if (j <= i || j >= n) {
+    return;
+  }
+
+  bool asc = (i & step) == 0;
+  bool need_swap = asc ? (res[i] > res[j]) : (res[i] < res[j]);
+
+  if (need_swap) {
+    std::swap(res[i], res[j]);
+  }
+}
+
+void BatcherStepRange(OutType &res, size_t begin, size_t end, size_t n, size_t step, size_t stage) {
+  for (size_t i = begin; i < end; ++i) {
+    BatcherCompareSwap(res, i, n, step, stage);
+  }
+}
+
 }  // namespace
 
 TitaevSortirovkaBetcheraSTL::TitaevSortirovkaBetcheraSTL(const InType &in) {
@@ -112,8 +133,8 @@ void TitaevSortirovkaBetcheraSTL::ConvertToKeys(const InType &input, std::vector
 
   std::vector<std::future<void>> futures;
 
-  for (size_t t = 0; t < threads; ++t) {
-    const size_t begin = t * block;
+  for (size_t ti = 0; ti < threads; ++ti) {
+    const size_t begin = ti * block;
 
     if (begin >= size) {
       break;
@@ -162,8 +183,8 @@ void TitaevSortirovkaBetcheraSTL::ConvertFromKeys(const std::vector<uint64_t> &k
 
   std::vector<std::future<void>> futures;
 
-  for (size_t t = 0; t < threads; ++t) {
-    const size_t begin = t * block;
+  for (size_t ti = 0; ti < threads; ++ti) {
+    const size_t begin = ti * block;
 
     if (begin >= size) {
       break;
@@ -190,8 +211,8 @@ void TitaevSortirovkaBetcheraSTL::BatcherStepParallel(OutType &res, size_t n, si
 
   std::vector<std::future<void>> futures;
 
-  for (size_t t = 0; t < threads; ++t) {
-    const size_t begin = t * block;
+  for (size_t ti = 0; ti < threads; ++ti) {
+    const size_t begin = ti * block;
 
     if (begin >= n) {
       break;
@@ -200,17 +221,7 @@ void TitaevSortirovkaBetcheraSTL::BatcherStepParallel(OutType &res, size_t n, si
     const size_t end = std::min(begin + block, n);
 
     futures.emplace_back(std::async(std::launch::async, [&res, begin, end, n, step, stage]() {
-      for (size_t i = begin; i < end; ++i) {
-        size_t j = i ^ stage;
-
-        if (j > i && j < n) {
-          bool asc = (i & step) == 0;
-
-          if (asc ? (res[i] > res[j]) : (res[i] < res[j])) {
-            std::swap(res[i], res[j]);
-          }
-        }
-      }
+      BatcherStepRange(res, begin, end, n, step, stage);
     }));
   }
 
