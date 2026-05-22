@@ -227,8 +227,10 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
 
   const size_t size = input.size();
 
+  auto &output = GetOutput();
+
   if (size <= 1) {
-    GetOutput() = input;
+    output.assign(input.begin(), input.end());
     return true;
   }
 
@@ -238,7 +240,7 @@ bool TitaevSortirovkaBetcheraSTL::RunImpl() {
 
   RadixSortParallel(keys);
 
-  ConvertFromKeys(keys, GetOutput());
+  ConvertFromKeys(keys, output);
 
   if ((size & (size - 1)) == 0) {
     BatcherSortParallel();
