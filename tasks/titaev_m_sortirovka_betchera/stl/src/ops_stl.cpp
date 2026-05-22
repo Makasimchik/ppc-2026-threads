@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <future>
 #include <limits>
 #include <thread>
@@ -12,6 +13,22 @@
 #include "titaev_m_sortirovka_betchera/common/include/common.hpp"
 
 namespace titaev_m_sortirovka_betchera {
+
+namespace {
+
+void ProcessMergeChunk(OutType &output, size_t begin, size_t end, size_t size_n, size_t step, size_t stage) {
+  for (size_t idx = begin; idx < end; ++idx) {
+    size_t partner = idx ^ stage;
+    if (partner > idx && partner < size_n) {
+      bool asc = (idx & step) == 0;
+      if (asc ? (output[idx] > output[partner]) : (output[idx] < output[partner])) {
+        std::swap(output[idx], output[partner]);
+      }
+    }
+  }
+}
+
+}  // namespace
 
 uint64_t TitaevSortirovkaBetcheraSTL::DoubleToBits(double val) {
   uint64_t bits = 0;
@@ -62,18 +79,6 @@ void TitaevSortirovkaBetcheraSTL::SerialRadixSort(std::vector<uint64_t> &data) {
       buffer[--counts[(data[i - 1] >> shift) & 255]] = data[i - 1];
     }
     data.swap(buffer);
-  }
-}
-
-static void ProcessMergeChunk(OutType &output, size_t begin, size_t end, size_t size_n, size_t step, size_t stage) {
-  for (size_t idx = begin; idx < end; ++idx) {
-    size_t partner = idx ^ stage;
-    if (partner > idx && partner < size_n) {
-      bool asc = (idx & step) == 0;
-      if (asc ? (output[idx] > output[partner]) : (output[idx] < output[partner])) {
-        std::swap(output[idx], output[partner]);
-      }
-    }
   }
 }
 
