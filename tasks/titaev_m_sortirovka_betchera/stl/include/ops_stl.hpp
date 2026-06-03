@@ -8,12 +8,12 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-class TitaevSortirovkaBetcheraOMP : public BaseTask {
+class TitaevSortirovkaBetcheraSTL : public BaseTask {
  public:
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
-    return ppc::task::TypeOfTask::kOMP;
+    return ppc::task::TypeOfTask::kSTL;
   }
-  explicit TitaevSortirovkaBetcheraOMP(const InType &in);
+  explicit TitaevSortirovkaBetcheraSTL(const InType &in);
 
  private:
   bool ValidationImpl() override;
@@ -23,6 +23,10 @@ class TitaevSortirovkaBetcheraOMP : public BaseTask {
 
   static void ConvertToKeys(const InType &input, std::vector<uint64_t> &keys);
   static void RadixSort(std::vector<uint64_t> &keys);
+  static void CountSequential(const std::vector<uint64_t> &keys, std::vector<std::size_t> &count, int pass);
+  static void CountParallel(const std::vector<uint64_t> &keys, std::vector<std::size_t> &count, int pass,
+                            unsigned int num_threads);
+  static void RadixCountPass(std::vector<uint64_t> &keys, std::vector<uint64_t> &tmp, int pass);
   static void ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output);
   void BatcherSort();
   static void BatcherStage(OutType &result, std::size_t array_size, std::size_t block, std::size_t step);

@@ -1,4 +1,4 @@
-#include "titaev_m_sortirovka_betchera/omp/include/ops_omp.hpp"
+#include "titaev_m_sortirovka_betchera/all/include/ops_all.hpp"
 
 #include <omp.h>
 
@@ -39,22 +39,22 @@ double OrderedUintToDouble(uint64_t bits) {
 
 }  // namespace
 
-TitaevSortirovkaBetcheraOMP::TitaevSortirovkaBetcheraOMP(const InType &in) {
+TitaevSortirovkaBetcheraALL::TitaevSortirovkaBetcheraALL(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
   GetInput() = in;
   GetOutput().clear();
 }
 
-bool TitaevSortirovkaBetcheraOMP::ValidationImpl() {
+bool TitaevSortirovkaBetcheraALL::ValidationImpl() {
   return !GetInput().empty();
 }
 
-bool TitaevSortirovkaBetcheraOMP::PreProcessingImpl() {
+bool TitaevSortirovkaBetcheraALL::PreProcessingImpl() {
   GetOutput() = GetInput();
   return true;
 }
 
-void TitaevSortirovkaBetcheraOMP::ConvertToKeys(const InType &input, std::vector<uint64_t> &keys) {
+void TitaevSortirovkaBetcheraALL::ConvertToKeys(const InType &input, std::vector<uint64_t> &keys) {
   const auto n = static_cast<int64_t>(input.size());
 #pragma omp parallel for default(none) shared(input, keys, n)
   for (int64_t i = 0; i < n; i++) {
@@ -62,7 +62,7 @@ void TitaevSortirovkaBetcheraOMP::ConvertToKeys(const InType &input, std::vector
   }
 }
 
-void TitaevSortirovkaBetcheraOMP::RadixSort(std::vector<uint64_t> &keys) {
+void TitaevSortirovkaBetcheraALL::RadixSort(std::vector<uint64_t> &keys) {
   const std::size_t n = keys.size();
   if (n <= 1) {
     return;
@@ -110,7 +110,7 @@ void TitaevSortirovkaBetcheraOMP::RadixSort(std::vector<uint64_t> &keys) {
   }
 }
 
-void TitaevSortirovkaBetcheraOMP::ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output) {
+void TitaevSortirovkaBetcheraALL::ConvertFromKeys(const std::vector<uint64_t> &keys, OutType &output) {
   const auto n = static_cast<int64_t>(keys.size());
   output.resize(keys.size());
 #pragma omp parallel for default(none) shared(keys, output, n)
@@ -119,7 +119,7 @@ void TitaevSortirovkaBetcheraOMP::ConvertFromKeys(const std::vector<uint64_t> &k
   }
 }
 
-void TitaevSortirovkaBetcheraOMP::BatcherStage(OutType &result, std::size_t array_size, std::size_t block,
+void TitaevSortirovkaBetcheraALL::BatcherStage(OutType &result, std::size_t array_size, std::size_t block,
                                                std::size_t step) {
   const auto signed_size = static_cast<int64_t>(array_size);
 #pragma omp parallel for default(none) shared(result, signed_size, block, step)
@@ -137,7 +137,7 @@ void TitaevSortirovkaBetcheraOMP::BatcherStage(OutType &result, std::size_t arra
   }
 }
 
-void TitaevSortirovkaBetcheraOMP::BatcherSort() {
+void TitaevSortirovkaBetcheraALL::BatcherSort() {
   auto &result = GetOutput();
   const std::size_t n = result.size();
   if (n < 2) {
@@ -150,7 +150,7 @@ void TitaevSortirovkaBetcheraOMP::BatcherSort() {
   }
 }
 
-bool TitaevSortirovkaBetcheraOMP::RunImpl() {
+bool TitaevSortirovkaBetcheraALL::RunImpl() {
   auto &input = GetInput();
   const std::size_t n = input.size();
   if (n <= 1) {
@@ -166,7 +166,7 @@ bool TitaevSortirovkaBetcheraOMP::RunImpl() {
   return true;
 }
 
-bool TitaevSortirovkaBetcheraOMP::PostProcessingImpl() {
+bool TitaevSortirovkaBetcheraALL::PostProcessingImpl() {
   return true;
 }
 

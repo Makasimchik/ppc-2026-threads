@@ -8,12 +8,12 @@
 
 namespace titaev_m_sortirovka_betchera {
 
-class TitaevSortirovkaBetcheraOMP : public BaseTask {
+class TitaevSortirovkaBetcheraALL : public BaseTask {
  public:
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
-    return ppc::task::TypeOfTask::kOMP;
+    return ppc::task::TypeOfTask::kALL;
   }
-  explicit TitaevSortirovkaBetcheraOMP(const InType &in);
+  explicit TitaevSortirovkaBetcheraALL(const InType &in);
 
  private:
   bool ValidationImpl() override;
